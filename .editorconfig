@@ -1,0 +1,10 @@
+# EditorConfig helps developers define and maintain consistent
+# coding styles between different editors and IDEs
+
+# top-most EditorConfig file
+root = true
+
+# Makefile settings for the opencv-watershed directory
+[opencv-watershed/Makefile]
+indent_style = tab
+tab_width = 4

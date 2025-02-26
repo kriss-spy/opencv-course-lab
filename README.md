@@ -2,6 +2,9 @@ data structure and algorithm course opencv lab project
 
 developed on linux
 
+* [ ] works on linux
+* [ ] works on windows
+
 ## lab requirement
 
 ### Input
@@ -24,6 +27,19 @@ developed on linux
 - Validate input legality and provide functionality and fault tolerance prompts
 - Optimize algorithms as much as possible to ensure stability and low time-space complexity
 - Design and optimize the interaction logic and visual UI of the demo
+
+## usage
+
+clone the repo
+
+### watershed with frontend
+
+```shell
+cd opencv-course-lab/opencv-watershed
+make
+cd watershed
+./cv2-watershed
+```
 
 ## lab report requirement
 

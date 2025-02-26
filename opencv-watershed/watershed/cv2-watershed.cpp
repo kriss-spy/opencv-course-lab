@@ -1,3 +1,7 @@
+// cmd to compile
+// g++ cv2-watershed.cpp -o cv2-watershed -I/usr/include/opencv4 -L/usr/lib \
+-lopencv_core -lopencv_imgcodecs -lopencv_highgui -lopencv_imgproc
+
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -68,14 +72,14 @@ int main(int argc, char **argv)
         if (c == 27)
             break;
 
-        if (c == 'r')
+        if (c == 'r') // BUG doesn't respond at all
         {
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
             imshow("image", img);
         }
 
-        if (c == 'w' || c == '\r')
+        if (c == 'w' || c == '\r') // BUG doesn't work, just changes color of whole img
         {
             vector<vector<Point>> contours;
             findContours(marker_mask, contours, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
@@ -118,3 +122,15 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
+// % ./cv2-watershed
+// Hot keys:
+//         ESC - quit the program
+//         r - restore the original image
+//         w or ENTER - run watershed algorithm
+//                 (before running it, roughly mark the areas on the image)
+// QSettings::value: Empty key passed
+// QSettings::value: Empty key passed
+// exec time = 0.219244ms
+// exec time = 0.470228ms
+// exec time = 1.02048ms
