@@ -1,7 +1,4 @@
-// use make
-// or compile manually
-// g++ cv2-watershed.cpp -o cv2-watershed -I/usr/include/opencv4 -L/usr/lib \
--lopencv_core -lopencv_imgcodecs -lopencv_highgui -lopencv_imgproc
+
 
 // original watershed.cpp doesn't use cv2, but cv.h
 #include <opencv2/opencv.hpp>
@@ -58,7 +55,7 @@ void markersDebugLog(const Mat &markers)
 int main(int argc, char **argv)
 {
     // Load image
-    const char *filename = argc >= 2 ? argv[1] : "fruits.jpg";
+    const char *filename = argc >= 2 ? argv[1] : "../image/fruits.jpg";
     RNG rng(12345);
 
     img0 = imread(filename, 1);
