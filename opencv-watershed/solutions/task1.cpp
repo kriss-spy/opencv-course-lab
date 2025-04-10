@@ -111,7 +111,7 @@ void print_help()
     printf("Hot keys: \n"
            "\tESC or q - quit the program\n"
            "\tr - restore the original image\n"
-           "\tg or ENTER - generate seeds\n"
+           "\tg - generate seeds\n"
            "\tv - visualize generated seeds\n"
            "\tw - run watershed\n");
     //    "\t\t(before running it, roughly mark the areas on the image)\n");
@@ -131,8 +131,6 @@ void get_image(string default_path)
         if (!input.empty())
         {
             filepath = input;
-            // Load image
-            RNG rng(12345);
             img0 = imread(filepath, 1);
             if (img0.empty())
             {
@@ -236,12 +234,15 @@ float get_temperature(float t_min, float t_max, float t_default)
 // Jittered grid vs Poisson disc
 // https://www.redblobgames.com/x/1830-jittered-grid/
 
-// void jittered_hex_grid_sample(cv::Mat &marker_mask, int k) // TODO more efficient hex grid sample
+// void jittered_hex_grid_sample(cv::Mat &marker_mask, int k) // TODO better algorithm hex grid sample
 // {
 // }
 
 vector<Point> jittered_grid_sample(int k, float temperature)
 {
+    // not fully using space at the end
+    // BUG not meeting requirement for min distance
+
     int M = marker_mask.rows;                    // Image height
     int N = marker_mask.cols;                    // Image width
     double min_dist = sqrt((double)(M * N) / k); // Minimum distance required
@@ -296,15 +297,6 @@ vector<Point> jittered_grid_sample(int k, float temperature)
             seeds.push_back(Point(x, y));
         }
     }
-    // BUG fail even when temperature is 0
-    // Distance violation between seeds 1 and 2: 46.00 < 49.57
-    // Warning: Some seeds do not satisfy the minimum distance constraint
-    // reason analysis: in the test case, k=100, 100 squares can't fill the fruits.jpg
-    // leaving the last squares unused for generation
-    // causing cell_width < min_dist
-
-    // FIX: Scale points to fully utilize the image space
-    // This ensures better distribution and helps maintain minimum distance
     if (seeds.size() > 0)
     {
         // Find min and max coordinates
@@ -390,17 +382,18 @@ vector<Point> generate_seeds(int k, float temperature)
 {
     double t = (double)getTickCount();
 
-    // Reset marker_mask to zeros
+    // Use 8-bit mask for visualization and 32-bit for watershed
     marker_mask = Mat::zeros(img.size(), CV_8UC1);
 
     // generate k random seed points in marker_mask
     vector<Point> seeds = jittered_grid_sample(k, temperature);
 
-    // Create proper regions for watershed from seed points
-    // Draw larger circles that will form distinct regions
+    // Draw smaller circles for markers to avoid overlapping
+    // But use distinct values for each region
     for (int i = 0; i < seeds.size(); i++)
     {
-        circle(marker_mask, seeds[i], 10, Scalar(i + 1), FILLED);
+        // Use modulo to handle values > 255
+        circle(marker_mask, seeds[i], 5, Scalar((i % 254) + 1), FILLED);
     }
 
     t = (double)getTickCount() - t;
@@ -427,6 +420,8 @@ int main(int argc, char **argv)
     std::cout << "Image size: " << img0.cols << "x" << img0.rows << " pixels" << std::endl;
     // std::cout << "Total area: " << img0.cols * img0.rows << " pixels" << std::endl;
 
+    RNG rng(12345);
+
     task1_state = INPUT_K;
     k = get_k(k_min, k_max);
     float temperature = get_temperature(0, 1, default_temperature);
@@ -441,7 +436,7 @@ int main(int argc, char **argv)
     img = img0.clone();
     img_gray = img0.clone();
     wshed = img0.clone();
-    marker_mask = Mat::zeros(img.size(), CV_8UC1);
+    marker_mask = Mat::zeros(img.size(), CV_32SC1);
     markers = Mat::zeros(img.size(), CV_32SC1);
     cvtColor(img, marker_mask, COLOR_BGR2GRAY);
     cvtColor(marker_mask, img_gray, COLOR_GRAY2BGR);
@@ -467,12 +462,14 @@ int main(int argc, char **argv)
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
             imshow("image", img);
+            wshed = img0.clone();
+            imshow("watershed transform", wshed);
         }
         if (c == 'v' && task1_state == WATERSHED)
         {
             visualize_seeds(seeds);
         }
-        if (c == 'g' || c == '\r') // generate seeds
+        if (c == 'g') // generate seeds
         {
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
@@ -482,33 +479,26 @@ int main(int argc, char **argv)
         }
         if (c == 'w' && task1_state == WATERSHED)
         {
-            vector<vector<Point>> contours;
-            findContours(marker_mask, contours, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
-
-            // markers = Scalar::all(0);
-            // int comp_count = 0;
-            // for (size_t i = 0; i < contours.size(); i++)
-            // {
-            //     drawContours(markers, contours, (int)i, Scalar::all(++comp_count), -1);
-            // }
+            // Clear markers before watershed
             markers = Mat::zeros(marker_mask.size(), CV_32SC1);
-            for (int i = 0; i < marker_mask.rows; i++)
+
+            // Find contours in marker_mask and use them as regions
+            vector<vector<Point>> contours;
+            findContours(marker_mask, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+            printf("Found %zu contours for watershed\n", contours.size());
+
+            // Draw each contour with a unique label
+            for (int i = 0; i < contours.size(); i++)
             {
-                for (int j = 0; j < marker_mask.cols; j++)
-                {
-                    if (marker_mask.at<uchar>(i, j) > 0)
-                    {
-                        markers.at<int>(i, j) = marker_mask.at<uchar>(i, j);
-                    }
-                }
+                drawContours(markers, contours, i, Scalar(i + 1), -1);
             }
-            int comp_count = k;
 
             // Debug log
-            markersDebugLog(marker_mask);
+            markersDebugLog(markers);
 
             vector<Vec3b> color_tab;
-            for (int i = 0; i < comp_count; i++)
+            for (int i = 0; i < contours.size(); i++)
             {
                 int b = rng.uniform(0, 255);
                 int g = rng.uniform(0, 255);
@@ -521,6 +511,7 @@ int main(int argc, char **argv)
             t = (double)getTickCount() - t;
             printf("watershed exec time = %gms\n", t / getTickFrequency() * 1000.);
 
+            // Color regions using watershed result
             for (int i = 0; i < markers.rows; i++)
                 for (int j = 0; j < markers.cols; j++)
                 {
@@ -528,7 +519,7 @@ int main(int argc, char **argv)
                     Vec3b &dst = wshed.at<Vec3b>(i, j);
                     if (idx == -1)
                         dst = Vec3b(255, 255, 255); // Boundary
-                    else if (idx <= 0 || idx > comp_count)
+                    else if (idx <= 0 || idx > contours.size())
                         dst = Vec3b(0, 0, 0); // Background
                     else
                         dst = color_tab[idx - 1]; // Segmented region
