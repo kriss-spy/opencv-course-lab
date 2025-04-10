@@ -6,14 +6,13 @@
 // solution
 // adopt general framework of cv2-watershed.cpp
 // add features:
+// user friendly cli
 // input img path (with size of MxN) and int k,
 // compute random seeds of number k, while keeping min distance of seeds larger than (M*N/K)0.5)
-// display image covered with seeds, print seed order num and coordinates
-// compute boundaries using watershed?
-// refer to cv2-watershed.cpp and put on random colors...
-// visualize result
+// display image covered with seeds, print seed numbering
+// run watershed
 
-// how to run task1
+// how to compile and run task1
 // cd opencv-course-lab/opencv-watershed/solutions
 // make
 // cd build
@@ -107,6 +106,8 @@ void sampleDebugLog(const Mat &marker_mask, vector<Point> seeds, double minDist)
 
 void print_help()
 {
+    // TODO print introduction
+
     // Print instructions
     printf("Hot keys: \n"
            "\tESC or q - quit the program\n"
@@ -114,7 +115,6 @@ void print_help()
            "\tg - generate seeds\n"
            "\tv - visualize generated seeds\n"
            "\tw - run watershed\n");
-    //    "\t\t(before running it, roughly mark the areas on the image)\n");
 }
 
 void get_image(string default_path)
@@ -234,9 +234,9 @@ float get_temperature(float t_min, float t_max, float t_default)
 // Jittered grid vs Poisson disc
 // https://www.redblobgames.com/x/1830-jittered-grid/
 
-// void jittered_hex_grid_sample(cv::Mat &marker_mask, int k) // TODO better algorithm hex grid sample
-// {
-// }
+void jittered_hex_grid_sample(int k, float temperature) // TODO better algorithm hex grid sample
+{
+}
 
 vector<Point> jittered_grid_sample(int k, float temperature)
 {

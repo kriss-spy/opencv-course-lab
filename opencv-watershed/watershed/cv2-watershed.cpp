@@ -58,7 +58,7 @@ void markersDebugLog(const Mat &markers)
 int main(int argc, char **argv)
 {
     // Load image
-    const char *filename = argc >= 2 ? argv[1] : "fruits.jpg";
+    const char *filename = argc >= 2 ? argv[1] : "../fruits.jpg";
     RNG rng(12345);
 
     img0 = imread(filename, 1);
