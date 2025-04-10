@@ -23,6 +23,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <stdio.h>
 #include <stdlib.h>
+#include <random>
 
 using namespace cv;
 using namespace std;
@@ -36,6 +37,7 @@ enum next_step
     INPUT_IMAGE,
     INPUT_K,
     INPUT_TEMP,
+    INPUT_SIGMA,
     GENERATE_SEEDS,
     WATERSHED,
     EXIT
@@ -60,6 +62,7 @@ void markersDebugLog(const Mat &markers)
 // Add this helper function to verify minimum distances
 bool verifyMinimumDistance(const vector<Point> &seeds, double minDist)
 {
+    bool flag = true;
     for (int i = 0; i < seeds.size(); i++)
     {
         for (int j = i + 1; j < seeds.size(); j++)
@@ -69,11 +72,11 @@ bool verifyMinimumDistance(const vector<Point> &seeds, double minDist)
             {
                 printf("Distance violation between seeds %d and %d: %.2f < %.2f\n",
                        i + 1, j + 1, dist, minDist);
-                return false;
+                flag = false;
             }
         }
     }
-    return true;
+    return flag;
 }
 
 void sampleDebugLog(const Mat &marker_mask, vector<Point> seeds, double minDist)
@@ -114,6 +117,7 @@ void print_help()
            "\tr - restore the original image\n"
            "\tg - generate seeds\n"
            "\tv - visualize generated seeds\n"
+           "\tc - clear input and restart\n"
            "\tw - run watershed\n");
 }
 
@@ -192,9 +196,9 @@ int get_k(int k_min, int k_max)
     }
 }
 
-float get_temperature(float t_min, float t_max, float t_default)
+double get_temperature(double t_min, double t_max, double t_default)
 {
-    float t;
+    double t;
     cout << "please input temperature between 0 and 1, press enter to use default " << t_default << endl;
     while (true)
     {
@@ -231,14 +235,253 @@ float get_temperature(float t_min, float t_max, float t_default)
     }
 }
 
+double get_sigma(double sigma_min, double sigma_max, double sigma_default)
+{
+    double sigma;
+    cout << "please input sigma, press enter to use default " << sigma_default << endl;
+    while (true)
+    {
+        cout << "> ";
+        string input;
+        getline(cin, input);
+        if (!input.empty())
+        {
+            try
+            {
+                sigma = stof(input);
+                if (sigma < sigma_min || sigma > sigma_max)
+                {
+                    cout << "sigma out of range!" << endl;
+                }
+                else
+                {
+                    return sigma;
+                }
+            }
+            catch (const std::invalid_argument &e)
+            {
+                cout << "Invalid input! Please enter a valid number." << endl;
+            }
+            catch (const std::out_of_range &e)
+            {
+                cout << "Input is too large!" << endl;
+            }
+        }
+        else
+        {
+            return sigma_default;
+        }
+    }
+}
+
 // Jittered grid vs Poisson disc
 // https://www.redblobgames.com/x/1830-jittered-grid/
 
-void jittered_hex_grid_sample(int k, float temperature) // TODO better algorithm hex grid sample
+vector<Point> jittered_hex_grid_sample(int k, double temperature, double sigma, bool zoomToEdge = true)
 {
+    // BUG not using the bottom space of the image
+    // before zoom, already meeting edge
+    // thus not meeting the min distance requirement
+
+    // potential fix1
+    // use bigger dist to replace min_dist in generate
+    // that is , to add a sigma (small but works)
+    // to make it easier to satisfy actual min_dist >= min_dist
+
+    // potential fix2
+    // to make full use of all space, including bottom space
+    // generate from the center
+    // so, before zoom, there could be space left near the edge
+    // then zoom to increase actual min dist
+
+    int M = marker_mask.rows;                    // Image height
+    int N = marker_mask.cols;                    // Image width
+    double min_dist = sqrt((double)(M * N) / k); // Minimum distance required
+    double scaled_min_dist = sigma * min_dist;   // Minimum distance required
+
+    // For a hexagonal grid with spacing d between nearest neighbors:
+    // - Horizontal spacing between columns = d
+    // - Vertical spacing between rows = d * sqrt(3)/2
+    double spacing = scaled_min_dist;
+    double h_spacing = spacing;
+    double v_spacing = spacing * sqrt(3) / 2;
+
+    // Random number generator
+    RNG rng(getTickCount());
+
+    // Vector to store generated seed points
+    vector<Point> seeds;
+
+    // Generate points in hexagonal grid pattern
+    for (double y = 0; y < M && seeds.size() < k; y += v_spacing)
+    {
+        // Offset alternating rows
+        bool odd_row = (int)(y / v_spacing) % 2 == 1;
+        double row_offset = odd_row ? h_spacing / 2 : 0;
+
+        for (double x = row_offset; x < N && seeds.size() < k; x += h_spacing)
+        {
+            // Apply temperature-based jitter if desired
+            double final_x = x;
+            double final_y = y;
+
+            if (temperature > 0)
+            {
+                // Calculate maximum jitter that preserves minimum distance
+                double max_jitter = spacing * 0.29 * temperature; // 0.29 is a safe factor for hexagonal grid
+
+                final_x += rng.uniform(-max_jitter, max_jitter);
+                final_y += rng.uniform(-max_jitter, max_jitter);
+            }
+
+            // Ensure point is within image boundaries
+            int px = round(final_x);
+            int py = round(final_y);
+
+            if (px >= 0 && px < N && py >= 0 && py < M)
+            {
+                seeds.push_back(Point(px, py));
+            }
+        }
+    }
+
+    // FIX: Center the grid vertically before applying zoom
+    if (seeds.size() > 0)
+    {
+        // Find min and max y coordinates to determine vertical extent
+        int min_y = M, max_y = 0;
+        for (const Point &p : seeds)
+        {
+            min_y = min(min_y, p.y);
+            max_y = max(max_y, p.y);
+        }
+
+        // Calculate the vertical shift needed to center the grid
+        int vertical_extent = max_y - min_y;
+        int unused_space = M - vertical_extent;
+        int vertical_shift = (unused_space / 2) - min_y;
+
+        // Only apply shift if significant
+        if (abs(vertical_shift) > v_spacing / 4)
+        {
+            // Apply vertical shift to all points
+            for (Point &p : seeds)
+            {
+                p.y += vertical_shift;
+
+                // Ensure point remains within image boundaries
+                p.y = max(0, min(M - 1, p.y));
+            }
+
+            printf("Applied vertical centering shift of %d pixels\n", vertical_shift);
+        }
+    }
+
+    // Modified scaling section for jittered_hex_grid_sample
+    if (zoomToEdge)
+    {
+        // Scale points to utilize the full image space
+        if (seeds.size() > 0)
+        {
+            // Find min and max coordinates after vertical centering
+            int min_x = N, min_y = M, max_x = 0, max_y = 0;
+            for (const Point &p : seeds)
+            {
+                min_x = min(min_x, p.x);
+                min_y = min(min_y, p.y);
+                max_x = max(max_x, p.x);
+                max_y = max(max_y, p.y);
+            }
+
+            printf("Before scaling - min bounds: (%d, %d), max bounds: (%d, %d)\n",
+                   min_x, min_y, max_x, max_y);
+
+            // CRITICAL FIX: Force points to extend to edges by using zero padding
+            int padding_x = 0; // Set to zero to fully utilize horizontal space
+            int padding_y = 0; // Set to zero to fully utilize vertical space
+
+            // Direct mapping: map min_y to 0 and max_y to M-1 exactly
+            for (Point &p : seeds)
+            {
+                // Map the full range directly to image boundaries
+                double mapped_x = ((double)(p.x - min_x) / (max_x - min_x)) * (N - 1);
+                double mapped_y = ((double)(p.y - min_y) / (max_y - min_y)) * (M - 1);
+
+                // Round to nearest integer
+                p.x = round(mapped_x);
+                p.y = round(mapped_y);
+            }
+
+            printf("Applied direct edge-to-edge mapping\n");
+
+            // Verify min/max coordinates after mapping
+            min_x = N, min_y = M, max_x = 0, max_y = 0;
+            for (const Point &p : seeds)
+            {
+                min_x = min(min_x, p.x);
+                min_y = min(min_y, p.y);
+                max_x = max(max_x, p.x);
+                max_y = max(max_y, p.y);
+            }
+
+            printf("After mapping - min bounds: (%d, %d), max bounds: (%d, %d)\n",
+                   min_x, min_y, max_x, max_y);
+
+            // Verify minimum distance constraint after mapping
+            bool distanceOk = verifyMinimumDistance(seeds, min_dist);
+            if (!distanceOk)
+            {
+                printf("Warning: After edge mapping, minimum distance constraint violated\n");
+
+                // Try to restore minimum distance while keeping points as close to edges as possible
+                // by gradually backing off from the edges
+                for (int padding = 1; padding < M / 4 && !distanceOk; padding++)
+                {
+                    vector<Point> test_seeds = seeds;
+
+                    // Recalculate with increased padding
+                    for (Point &p : test_seeds)
+                    {
+                        // Add small padding from edges
+                        double mapped_x = padding + ((double)(p.x - min_x) / (max_x - min_x)) * (N - 1 - 2 * padding);
+                        double mapped_y = padding + ((double)(p.y - min_y) / (max_y - min_y)) * (M - 1 - 2 * padding);
+
+                        p.x = round(mapped_x);
+                        p.y = round(mapped_y);
+                    }
+
+                    distanceOk = verifyMinimumDistance(test_seeds, min_dist);
+                    if (distanceOk)
+                    {
+                        seeds = test_seeds;
+                        printf("Applied edge mapping with padding=%d to preserve minimum distance\n", padding);
+                    }
+                }
+            }
+        }
+    }
+    // Verify that points still satisfy minimum distance after final configuration
+    bool finalDistanceOk = verifyMinimumDistance(seeds, min_dist);
+    if (!finalDistanceOk)
+    {
+        printf("Warning: Final points don't satisfy minimum distance!\n");
+    }
+    else
+    {
+        printf("Success: All points satisfy minimum distance of %.2f\n", min_dist);
+    }
+
+    // Print information about generated points
+    printf("Generated %zu seed points using hexagonal grid sampling\n", seeds.size());
+    printf("Minimum distance threshold: %.2f pixels\n", min_dist);
+    printf("Hexagonal grid with spacing: %.2f\n", spacing);
+
+    sampleDebugLog(markers, seeds, min_dist);
+
+    return seeds;
 }
 
-vector<Point> jittered_grid_sample(int k, float temperature)
+vector<Point> jittered_grid_sample(int k, double temperature, bool zoomToEdge = true)
 {
     // not fully using space at the end
     // BUG not meeting requirement for min distance
@@ -297,51 +540,55 @@ vector<Point> jittered_grid_sample(int k, float temperature)
             seeds.push_back(Point(x, y));
         }
     }
-    if (seeds.size() > 0)
+
+    if (zoomToEdge)
     {
-        // Find min and max coordinates
-        int min_x = N, min_y = M, max_x = 0, max_y = 0;
-        for (const Point &p : seeds)
+        // zoom
+        if (seeds.size() > 0)
         {
-            min_x = min(min_x, p.x);
-            min_y = min(min_y, p.y);
-            max_x = max(max_x, p.x);
-            max_y = max(max_y, p.y);
-        }
-
-        // Calculate scale factors to expand points to full image
-        double scale_x = (double)(N - 1) / max(1, max_x - min_x);
-        double scale_y = (double)(M - 1) / max(1, max_y - min_y);
-
-        // Use the smaller scale to maintain aspect ratio
-        double scale = min(scale_x, scale_y);
-
-        // Only apply scaling if it actually increases the spread (scale > 1.0)
-        if (scale > 1.05)
-        { // Add a small threshold to avoid unnecessary scaling
-            // Calculate centroid for scaling from center
-            double center_x = (min_x + max_x) / 2.0;
-            double center_y = (min_y + max_y) / 2.0;
-
-            // Apply scaling to all points
-            for (Point &p : seeds)
+            // Find min and max coordinates
+            int min_x = N, min_y = M, max_x = 0, max_y = 0;
+            for (const Point &p : seeds)
             {
-                // Scale from center
-                double dx = p.x - center_x;
-                double dy = p.y - center_y;
-
-                p.x = round(center_x + dx * scale);
-                p.y = round(center_y + dy * scale);
-
-                // Ensure point remains within image boundaries
-                p.x = max(0, min(N - 1, p.x));
-                p.y = max(0, min(M - 1, p.y));
+                min_x = min(min_x, p.x);
+                min_y = min(min_y, p.y);
+                max_x = max(max_x, p.x);
+                max_y = max(max_y, p.y);
             }
 
-            printf("Applied scaling factor of %.2f to better distribute points\n", scale);
+            // Calculate scale factors to expand points to full image
+            double scale_x = (double)(N - 1) / max(1, max_x - min_x);
+            double scale_y = (double)(M - 1) / max(1, max_y - min_y);
+
+            // Use the smaller scale to maintain aspect ratio
+            double scale = min(scale_x, scale_y);
+
+            // Only apply scaling if it actually increases the spread (scale > 1.0)
+            if (scale > 1.05)
+            { // Add a small threshold to avoid unnecessary scaling
+                // Calculate centroid for scaling from center
+                double center_x = (min_x + max_x) / 2.0;
+                double center_y = (min_y + max_y) / 2.0;
+
+                // Apply scaling to all points
+                for (Point &p : seeds)
+                {
+                    // Scale from center
+                    double dx = p.x - center_x;
+                    double dy = p.y - center_y;
+
+                    p.x = round(center_x + dx * scale);
+                    p.y = round(center_y + dy * scale);
+
+                    // Ensure point remains within image boundaries
+                    p.x = max(0, min(N - 1, p.x));
+                    p.y = max(0, min(M - 1, p.y));
+                }
+
+                printf("Applied scaling factor of %.2f to better distribute points\n", scale);
+            }
         }
     }
-
     // Print information about generated points
     printf("Generated %zu seed points using jittered grid sampling\n", seeds.size());
     printf("Minimum distance threshold: %.2f pixels\n", min_dist);
@@ -354,21 +601,36 @@ vector<Point> jittered_grid_sample(int k, float temperature)
 
 void visualize_seeds(vector<Point> seeds)
 {
-    // Draw circles and numbers on the original image
-    for (int i = 0; i < seeds.size(); i++)
+    if (seeds.size() > 100)
     {
-        // Draw a visible circle at each seed point
-        // Use a contrasting color that stands out on most images
-        circle(img, seeds[i], 3, Scalar(0, 255, 255), FILLED);
-        circle(img, seeds[i], 3, Scalar(0, 0, 0), 1); // Black outline for contrast
+        // Draw circles on the original image
+        for (int i = 0; i < seeds.size(); i++)
+        {
+            // Draw a visible circle at each seed point
+            // Use a contrasting color that stands out on most images
+            circle(img, seeds[i], 3, Scalar(0, 255, 255), FILLED);
+            circle(img, seeds[i], 3, Scalar(0, 0, 0), 1); // Black outline for contrast
+        }
+    }
 
-        // Place the seed number next to the point
-        Point textPos(seeds[i].x + 5, seeds[i].y + 5);
+    else
+    {
+        // Draw circles and numbers on the original image
+        for (int i = 0; i < seeds.size(); i++)
+        {
+            // Draw a visible circle at each seed point
+            // Use a contrasting color that stands out on most images
+            circle(img, seeds[i], 3, Scalar(0, 255, 255), FILLED);
+            circle(img, seeds[i], 3, Scalar(0, 0, 0), 1); // Black outline for contrast
 
-        putText(img, to_string(i + 1), textPos, FONT_HERSHEY_SIMPLEX,
-                0.4, Scalar(0, 0, 0), 2, LINE_AA); // Outlined text (thicker)
-        putText(img, to_string(i + 1), textPos, FONT_HERSHEY_SIMPLEX,
-                0.4, Scalar(255, 255, 255), 1, LINE_AA); // White text
+            // Place the seed number next to the point
+            Point textPos(seeds[i].x + 5, seeds[i].y + 5);
+
+            putText(img, to_string(i + 1), textPos, FONT_HERSHEY_SIMPLEX,
+                    0.4, Scalar(0, 0, 0), 2, LINE_AA); // Outlined text (thicker)
+            putText(img, to_string(i + 1), textPos, FONT_HERSHEY_SIMPLEX,
+                    0.4, Scalar(255, 255, 255), 1, LINE_AA); // White text
+        }
     }
 
     // Update the displayed image
@@ -378,7 +640,7 @@ void visualize_seeds(vector<Point> seeds)
     printf("Visualized %zu seed points on the image\n", seeds.size());
 }
 
-vector<Point> generate_seeds(int k, float temperature)
+vector<Point> generate_seeds(int k, double temperature, double sigma)
 {
     double t = (double)getTickCount();
 
@@ -386,7 +648,8 @@ vector<Point> generate_seeds(int k, float temperature)
     marker_mask = Mat::zeros(img.size(), CV_8UC1);
 
     // generate k random seed points in marker_mask
-    vector<Point> seeds = jittered_grid_sample(k, temperature);
+    // vector<Point> seeds = jittered_grid_sample(k, temperature);
+    vector<Point> seeds = jittered_hex_grid_sample(k, temperature, sigma, true);
 
     // Draw smaller circles for markers to avoid overlapping
     // But use distinct values for each region
@@ -406,11 +669,14 @@ const int k_min = 1;
 const int k_max = 5000; // TODO choose proper values for k range
 // theoretical max for 600x600 image, about 100000?
 
+// TODO automatic stress test
 int main(int argc, char **argv)
 {
     int k = 0;
-    float default_temperature = 0.01;
+    double default_temperature = 0.01;
+    double default_sigma = 1.03;
     vector<Point> seeds;
+
     task1_state = INPUT_IMAGE;
     string default_image = "../image/fruits.jpg";
     get_image(default_image);
@@ -420,11 +686,16 @@ int main(int argc, char **argv)
     std::cout << "Image size: " << img0.cols << "x" << img0.rows << " pixels" << std::endl;
     // std::cout << "Total area: " << img0.cols * img0.rows << " pixels" << std::endl;
 
-    RNG rng(12345);
+    RNG rng(getTickCount());
 
     task1_state = INPUT_K;
     k = get_k(k_min, k_max);
-    float temperature = get_temperature(0, 1, default_temperature);
+
+    task1_state = INPUT_TEMP;
+    double temperature = get_temperature(0, 1, default_temperature);
+
+    task1_state = INPUT_SIGMA;
+    double sigma = get_sigma(1, 2, default_sigma);
 
     print_help();
 
@@ -453,6 +724,9 @@ int main(int argc, char **argv)
 
         if (c == 27 || c == 'q')
             break;
+        if (c == 'c') // TODO implement c key
+        {
+        }
         if (c == 'h')
         {
             print_help();
@@ -474,7 +748,7 @@ int main(int argc, char **argv)
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
 
-            seeds = generate_seeds(k, temperature);
+            seeds = generate_seeds(k, temperature, sigma);
             task1_state = WATERSHED;
         }
         if (c == 'w' && task1_state == WATERSHED)
