@@ -55,7 +55,6 @@ void print_task1_help()
            "\tv - visualize generated seeds\n"
            "\tc - clear input and restart\n"
            "\tw - run watershed\n");
-    "\t"
 }
 
 void print_task2_help()
@@ -68,9 +67,7 @@ void print_task2_help()
            "\tv - visualize generated seeds\n"
            //    "\tc - clear input and restart\n"
            "\tw - run watershed\n"
-           "\tc - perform four color");
-
-    "\t"
+           "\tc - perform four color\n");
 }
 
 // Get image from user input or use default
@@ -300,11 +297,11 @@ double calculateDistance(const Point &p1, const Point &p2)
 }
 
 // Visualize seeds on the image
-void visualize_seeds(const Mat &img, const vector<Point> &seeds)
+void visualize_seeds(string window_title, const Mat &img, const vector<Point> &seeds, int max_seed_num)
 {
     Mat display = img.clone();
 
-    if (seeds.size() > 100)
+    if (seeds.size() > max_seed_num)
     {
         // Draw circles on the original image
         for (int i = 0; i < seeds.size(); i++)
@@ -336,13 +333,168 @@ void visualize_seeds(const Mat &img, const vector<Point> &seeds)
     }
 
     // Update the displayed image
-    imshow("image", display);
+    imshow(window_title, display);
 
     // Print summary information
-    printf("Visualized %zu seed points on the image\n", seeds.size());
+    printf("Visualized %zu seed points\n", seeds.size());
+}
+bool try_adjust_seeds(Point &seed, vector<Point> &violation_seeds, double min_dist, const Mat &marker_mask)
+{
+    // TODO verity funcionality
+    const int MAX_ATTEMPTS = 30;
+    const int NUM_DIRECTIONS = 16;
+    const double MAX_RADIUS_MULTIPLIER = 2.0;
+
+    int img_height = marker_mask.rows;
+    int img_width = marker_mask.cols;
+
+    Point original_seed = seed;
+    double current_min_dist = DBL_MAX;
+
+    // Compute the current minimum distance to violating neighbors
+    for (const Point &violator : violation_seeds)
+    {
+        double dist = norm(seed - violator);
+        current_min_dist = min(current_min_dist, dist);
+    }
+
+    //--- 1) Force-directed approach
+    for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++)
+    {
+        Point2f force_vector(0, 0);
+        bool all_satisfied = true;
+
+        // Calculate net repulsion force from violating neighbors
+        for (const Point &violator : violation_seeds)
+        {
+            double dist = norm(seed - violator);
+            if (dist < min_dist)
+            {
+                all_satisfied = false;
+                Point2f direction(seed.x - violator.x, seed.y - violator.y);
+                double mag = norm(direction);
+                if (mag > 0)
+                {
+                    direction.x /= mag;
+                    direction.y /= mag;
+                    double force_strength = (min_dist - dist) / min_dist;
+                    force_vector.x += direction.x * force_strength;
+                    force_vector.y += direction.y * force_strength;
+                }
+            }
+        }
+
+        if (all_satisfied)
+        {
+            // Already satisfied all constraints, done
+            cout << "Seed adjusted successfully after " << attempt << " attempts" << endl;
+            return true;
+        }
+
+        if (norm(force_vector) < 1e-6)
+            break; // No meaningful force to move the seed
+
+        // Normalize force
+        double fmag = norm(force_vector);
+        force_vector.x /= fmag;
+        force_vector.y /= fmag;
+
+        // Step size increases each attempt
+        double step_size = min_dist * 0.2 * (1 + attempt * 0.1);
+
+        // Try the new position
+        Point new_seed(
+            cvRound(seed.x + force_vector.x * step_size),
+            cvRound(seed.y + force_vector.y * step_size));
+
+        // Keep within image
+        new_seed.x = max(0, min(img_width - 1, new_seed.x));
+        new_seed.y = max(0, min(img_height - 1, new_seed.y));
+
+        // Check if new position improves the minimum distance
+        double new_min_dist = DBL_MAX;
+        for (const Point &violator : violation_seeds)
+        {
+            double dist = norm(new_seed - violator);
+            new_min_dist = min(new_min_dist, dist);
+        }
+
+        // If it improves (or at least doesn't worsen), update seed
+        if (new_min_dist > current_min_dist)
+        {
+            seed = new_seed;
+            current_min_dist = new_min_dist;
+        }
+        else
+        {
+            // Not an improvement, stop force attempts
+            break;
+        }
+    }
+
+    //--- 2) Systematic search in multiple directions if force-based failed
+    Point best_seed = seed;
+    double best_min_violation_dist = current_min_dist;
+
+    for (int i = 0; i < NUM_DIRECTIONS; i++)
+    {
+        double angle = 2.0 * CV_PI * i / NUM_DIRECTIONS;
+        for (double radius_mult = 0.5; radius_mult <= MAX_RADIUS_MULTIPLIER; radius_mult += 0.25)
+        {
+            double radius = min_dist * radius_mult;
+            Point test_seed(
+                cvRound(original_seed.x + cos(angle) * radius),
+                cvRound(original_seed.y + sin(angle) * radius));
+
+            // Stay in bounds
+            test_seed.x = max(0, min(img_width - 1, test_seed.x));
+            test_seed.y = max(0, min(img_height - 1, test_seed.y));
+
+            // Check minimum distance to violating neighbors
+            double local_min_dist = DBL_MAX;
+            bool satisfies_all = true;
+            for (const Point &violator : violation_seeds)
+            {
+                double dist = norm(test_seed - violator);
+                local_min_dist = min(local_min_dist, dist);
+                if (dist < min_dist)
+                    satisfies_all = false;
+            }
+
+            // If fully satisfied, update and return
+            if (satisfies_all)
+            {
+                seed = test_seed;
+                return true;
+            }
+
+            // Otherwise track best improvement
+            if (local_min_dist > best_min_violation_dist)
+            {
+                best_min_violation_dist = local_min_dist;
+                best_seed = test_seed;
+            }
+        }
+    }
+
+    // If we found a slightly better position, use that
+    if (best_min_violation_dist > current_min_dist)
+    {
+        seed = best_seed;
+        cout << "Could not fully satisfy constraints, but improved min distance from "
+             << current_min_dist << " to " << best_min_violation_dist
+             << " (required: " << min_dist << ")" << endl;
+        return true;
+    }
+
+    // Failed to improve enough
+    cout << "Failed to adjust seed at (" << original_seed.x << ", " << original_seed.y
+         << ") with min_dist=" << min_dist
+         << ". Closest violation distance remained: " << current_min_dist << endl;
+    return false;
 }
 
-vector<Point> jittered_hex_grid_sample(int k, double temperature, double sigma, bool zoomToEdge = true)
+vector<Point> jittered_hex_grid_sample(const Mat &marker_mask, int k, double temperature, double sigma, bool zoomToEdge = true)
 {
     int M = marker_mask.rows;                    // Image height
     int N = marker_mask.cols;                    // Image width
@@ -486,7 +638,7 @@ vector<Point> jittered_hex_grid_sample(int k, double temperature, double sigma, 
                     // If there are violations, try to adjust the seed
                     if (!violating_neighbors.empty())
                     {
-                        bool success = try_adjust_seeds(seeds[i], violating_neighbors, min_dist);
+                        bool success = try_adjust_seeds(seeds[i], violating_neighbors, min_dist, marker_mask);
                         if (success)
                         {
                             adjusted = true;
@@ -543,7 +695,7 @@ vector<Point> jittered_hex_grid_sample(int k, double temperature, double sigma, 
     return seeds;
 }
 
-vector<Point> jittered_grid_sample(int k, double temperature, bool zoomToEdge = true)
+vector<Point> jittered_grid_sample(const Mat &marker_mask, int k, double temperature, bool zoomToEdge = true)
 {
     // not fully using space at the end
     // BUG not meeting requirement for min distance
@@ -666,7 +818,7 @@ vector<Point> jittered_grid_sample(int k, double temperature, bool zoomToEdge = 
         printf("Warning: Some seeds still do not satisfy the minimum distance constraint\n");
     }
 
-    sampleDebugLog(markers, seeds, min_dist);
+    sampleDebugLog(marker_mask, seeds, min_dist);
 
     return seeds;
 }
@@ -844,7 +996,7 @@ vector<Point> cyj_generateSeeds(int K, int rows, int cols)
     return seeds;
 }
 
-vector<Point> generate_seeds(int k, double temperature, double sigma)
+vector<Point> generate_seeds(const Mat &img, Mat &marker_mask, int k, double temperature, double sigma)
 {
     double t = (double)getTickCount();
 
@@ -852,8 +1004,8 @@ vector<Point> generate_seeds(int k, double temperature, double sigma)
     marker_mask = Mat::zeros(img.size(), CV_8UC1);
 
     // generate k random seed points in marker_mask
-    vector<Point> seeds = jittered_grid_sample(k, temperature);
-    // vector<Point> seeds = jittered_hex_grid_sample(k, temperature, sigma, true);
+    vector<Point> seeds = jittered_grid_sample(marker_mask, k, temperature);
+    // vector<Point> seeds = jittered_hex_grid_sample(marker_mask, k, temperature, sigma, true);
 
     // Draw smaller circles for markers to avoid overlapping
     // But use distinct values for each region
