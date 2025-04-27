@@ -32,12 +32,12 @@ developed on linux
 
 clone the repo
 
-### watershed with frontend
+### watershed demo with frontend
 
 ```shell
-cd opencv-course-lab/opencv-watershed
+cd opencv-course-lab/opencv-watershed/watershed
 make
-cd watershed
+cd build
 ./cv2-watershed
 ```
 

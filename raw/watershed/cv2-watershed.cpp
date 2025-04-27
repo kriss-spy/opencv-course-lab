@@ -72,14 +72,14 @@ int main(int argc, char **argv)
         if (c == 27)
             break;
 
-        if (c == 'r') // BUG doesn't respond at all
+        if (c == 'r')
         {
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
             imshow("image", img);
         }
 
-        if (c == 'w' || c == '\r') // BUG doesn't work, just changes color of whole img
+        if (c == 'w' || c == '\r')
         {
             vector<vector<Point>> contours;
             findContours(marker_mask, contours, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
