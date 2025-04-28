@@ -14,8 +14,7 @@
 // how to compile and run task2
 // cd opencv-course-lab/opencv-watershed/solutions
 // make
-// cd build
-// ./task2
+// build/task2
 
 // below is task1 code
 // task2 not fully implemented
@@ -105,8 +104,9 @@ vector<int> findNeighbors(const Mat &markers, int region_id, int total_regions)
                     // Only print when we first find a neighbor
                     if (!is_neighbor[neighbor_id])
                     {
+#ifdef DEBUG
                         cout << "  Found neighbor " << neighbor_id << " at position (" << j << "," << i << ")" << endl;
-
+#endif
                         // Store the meeting point with both region IDs
                         // We'll store the point only once for each region pair (lower ID first)
                         if (region_id < neighbor_id)
@@ -173,7 +173,7 @@ vector<vector<int>> buildAdjacencyList(const Mat &markers, int total_regions)
             }
         }
     }
-
+#ifdef DEBUG
     // Print adjacency list for debugging
     cout << "Adjacency List:" << endl;
     for (int i = 1; i <= total_regions; i++)
@@ -185,7 +185,7 @@ vector<vector<int>> buildAdjacencyList(const Mat &markers, int total_regions)
         }
         cout << endl;
     }
-
+#endif
     return adjacency_list;
 }
 
@@ -326,6 +326,9 @@ int getMostConnectedRegion(const vector<vector<int>> &adjacency_list, int total_
 // Initialize image, parameters, and masks
 void initApp(vector<Point> &seeds)
 {
+    print_welcome();
+    print_task2_help();
+
     double default_temperature = 0.01;
     double default_sigma = 1.02;
     task2_next_step = INPUT_IMAGE;
@@ -341,8 +344,6 @@ void initApp(vector<Point> &seeds)
 
     task2_next_step = INPUT_SIGMA;
     sigma = get_sigma(1, 2, default_sigma);
-
-    print_task2_help();
 
     img = img0.clone();
     img_gray = img0.clone();
@@ -463,17 +464,11 @@ void runEventLoop(vector<Point> &seeds)
 
             task2_next_step = FOURCOLOR;
         }
+
         if (c == 'c' && task2_next_step == FOURCOLOR)
         {
             // Get total number of regions (max marker value excluding boundaries and background)
             int total_regions = seeds.size(); // 1~seeds.size()
-            // for (int i = 0; i < markers.rows; i++)
-            // {
-            //     for (int j = 0; j < markers.cols; j++)
-            //     {
-            //         total_regions = max(total_regions, markers.at<int>(i, j));
-            //     }
-            // }
 
             cout << "Total regions for four-coloring: " << total_regions << endl;
 
@@ -552,83 +547,11 @@ void runEventLoop(vector<Point> &seeds)
                 }
             }
 
+#ifdef DEBUG
             // Create a version of the four-color result with seed points
-            Mat four_color_with_seeds = four_color_result.clone();
-
-            // Draw seed points with numbers on the four-color result
-            if (seeds.size() > 200)
-            {
-                // For many seeds, just show points without numbers
-                for (int i = 0; i < seeds.size(); i++)
-                {
-                    // Draw a visible circle at each seed point with a contrasting color
-                    circle(four_color_with_seeds, seeds[i], 3, Scalar(0, 255, 255), FILLED);
-                    circle(four_color_with_seeds, seeds[i], 3, Scalar(0, 0, 0), 1); // Black outline
-                }
-
-                // Add a label showing how many seeds are displayed
-                String seedCountText = format("Seeds: %zu", seeds.size());
-                putText(four_color_with_seeds, seedCountText, Point(20, 30), FONT_HERSHEY_SIMPLEX,
-                        0.7, Scalar(0, 0, 0), 2);
-                putText(four_color_with_seeds, seedCountText, Point(20, 30), FONT_HERSHEY_SIMPLEX,
-                        0.7, Scalar(255, 255, 255), 1);
-            }
-            else
-            {
-                // For fewer seeds, include numbers
-                for (int i = 0; i < seeds.size(); i++)
-                {
-                    // Draw a visible circle at each seed point
-                    circle(four_color_with_seeds, seeds[i], 3, Scalar(0, 255, 255), FILLED);
-                    circle(four_color_with_seeds, seeds[i], 3, Scalar(0, 0, 0), 1); // Black outline
-
-                    // Place the seed number next to the point
-                    Point textPos(seeds[i].x + 5, seeds[i].y + 5);
-
-                    // Add outlined text for better visibility against various backgrounds
-                    putText(four_color_with_seeds, to_string(i + 1), textPos, FONT_HERSHEY_SIMPLEX,
-                            0.4, Scalar(0, 0, 0), 2, LINE_AA); // Outlined text
-                    putText(four_color_with_seeds, to_string(i + 1), textPos, FONT_HERSHEY_SIMPLEX,
-                            0.4, Scalar(255, 255, 255), 1, LINE_AA); // White text
-                }
-            }
-
-            // Display the four-color result with seed points
-            imshow("four color result", four_color_with_seeds);
-
-            // Create a copy to visualize adjacency points
-            Mat adjacency_vis = four_color_with_seeds.clone();
-
-            // Visualize all adjacency points
-            vector<Point> adj_points_only;
-            for (const auto &pair : adjacency_points)
-            {
-                adj_points_only.push_back(pair.first);
-
-                // Draw a small cross at each adjacency point
-                Point p = pair.first;
-                int r1 = pair.second.first;
-                int r2 = pair.second.second;
-
-                // Add text to show which regions meet here
-                string text = to_string(r1) + "-" + to_string(r2);
-                putText(adjacency_vis, text, Point(p.x + 5, p.y - 5),
-                        FONT_HERSHEY_SIMPLEX, 0.3, Scalar(255, 255, 255), 1, LINE_AA);
-
-                // Draw a small cross
-                line(adjacency_vis, Point(p.x - 2, p.y - 2), Point(p.x + 2, p.y + 2), Scalar(0, 0, 0), 2);
-                line(adjacency_vis, Point(p.x + 2, p.y - 2), Point(p.x - 2, p.y + 2), Scalar(0, 0, 0), 2);
-                circle(adjacency_vis, p, 3, Scalar(255, 255, 255), 1);
-            }
-
-            // Show the visualization with all adjacency points
-            imshow("adjacency points", adjacency_vis);
-
-            // Use the provided visualize_points function to show the points
-            if (!adj_points_only.empty())
-            {
-                visualize_points("adjacency visualization", four_color_result, adj_points_only, adj_points_only.size());
-            }
+            visualize_regions("four color result", four_color_result, seeds, markers);
+            // note that region numbering is markers.at<seed>
+#endif
 
             // Verify that the four-coloring is valid
             bool valid_coloring = true;

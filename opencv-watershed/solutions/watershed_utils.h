@@ -354,6 +354,53 @@ void visualize_points(string window_title, const Mat &img, const vector<Point> &
     // Print summary information
     printf("Visualized %zu seed points in %s\n", points.size(), window_title.c_str());
 }
+
+void visualize_regions(string window_title, const Mat &img, const vector<Point> &points, cv::Mat markers,
+                       int max_numbered_points = 100,
+                       const Scalar &point_color = Scalar(0, 255, 255),
+                       int radius = 3,
+                       bool show_numbers = true)
+{
+    Mat display = img.clone();
+
+    // Draw all points
+    for (int i = 0; i < points.size(); i++)
+    {
+        // Draw a visible circle at each point
+        circle(display, points[i], radius, point_color, FILLED);
+        circle(display, points[i], radius, Scalar(0, 0, 0), 1); // Black outline for contrast
+
+        // Only show numbers if requested and if there aren't too many points
+        if (show_numbers && points.size() <= max_numbered_points)
+        {
+            // Place the point number next to the point
+            Point textPos(points[i].x + 5, points[i].y + 5);
+            int x = points[i].x;
+            int y = points[i].y;
+            if (x <= 0)
+                x = 1;
+            if (x >= img.cols - 1)
+                x = img.cols - 2;
+            if (y <= 0)
+                y = 1;
+            if (y >= img.rows - 1)
+                y = img.rows - 2;
+            int idx = markers.at<int>(x, y);
+
+            putText(display, to_string(idx), textPos, FONT_HERSHEY_SIMPLEX,
+                    0.4, Scalar(0, 0, 0), 2, LINE_AA); // Outlined text (thicker)
+            putText(display, to_string(idx), textPos, FONT_HERSHEY_SIMPLEX,
+                    0.4, Scalar(255, 255, 255), 1, LINE_AA); // White text
+        }
+    }
+
+    // Update the displayed image
+    imshow(window_title, display);
+
+    // Print summary information
+    printf("Visualized %zu regions with seed points in %s\n", points.size(), window_title.c_str());
+}
+
 bool try_adjust_seeds(Point &seed, vector<Point> &violation_seeds, double min_dist, const Mat &marker_mask)
 {
     // TODO verity funcionality
@@ -1037,4 +1084,8 @@ vector<Point> generate_seeds(const Mat &img, Mat &marker_mask, int k, double tem
     return seeds;
 }
 
+void print_welcome() // TODO print_welcome
+{
+    cout << "===" << "opencv watershed lab program" << "===" << endl;
+}
 #endif // WATERSHED_UTILS_H
