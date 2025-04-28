@@ -29,12 +29,19 @@
 #include <stack>
 #include <unordered_set>
 #include "watershed_utils.h" // Include the utility functions
+#include "helper.h"
 
 using namespace cv;
 using namespace std;
 
 // Global variables
 Mat marker_mask, markers, img0, img, img_gray, wshed;
+// marker_mask: Binary mask where seed points/markers are stored as non-zero values; used to identify initial regions for watershed
+// markers: Integer matrix where each region is labeled with a unique positive number; watershed algorithm fills this with region IDs (-1 for boundaries)
+// img0: Original input image that remains unchanged
+// img: Working copy of the image that can be modified
+// img_gray: Grayscale version of the image for processing and visualization
+// wshed: Output image where watershed results are visualized with colored regions
 Point prev_pt(-1, -1);
 NextStep task2_next_step;
 FourColor four_colors;
@@ -42,6 +49,10 @@ FourColor four_colors;
 const int k_min = 1;
 const int k_max = 5000; // TODO choose proper values for k range
 // theoretical max for 600x600 image, about 100000?
+
+int k;
+double temperature;
+double sigma;
 
 // Four color palette - red, yellow, green, blue
 const Vec3b FOUR_COLOR_PALETTE[4] = {
@@ -51,11 +62,21 @@ const Vec3b FOUR_COLOR_PALETTE[4] = {
     Vec3b(255, 0, 0)    // BLUE
 };
 
+// Add a global variable to store adjacency meeting points
+vector<pair<Point, pair<int, int>>> adjacency_points; // Point and the two region IDs
+
 // Function to find neighbors of a region - completely rewritten to properly detect adjacency
 vector<int> findNeighbors(const Mat &markers, int region_id, int total_regions)
 {
     vector<bool> is_neighbor(total_regions + 1, false);
     vector<int> neighbors;
+
+    // // Debug matrix to visualize where adjacencies are found
+    // Mat debug_vis;
+    // if (region_id == 3 || region_id == 10)
+    // { // Focus on the problematic regions
+    //     cvtColor(markers == region_id, debug_vis, COLOR_GRAY2BGR);
+    // }
 
     // Detect boundary pixels for the current region
     Mat region_mask = (markers == region_id);
@@ -69,6 +90,8 @@ vector<int> findNeighbors(const Mat &markers, int region_id, int total_regions)
     Mat boundary;
     subtract(dilated, region_mask, boundary);
 
+    cout << "Checking neighbors for region " << region_id << ":" << endl;
+
     // Find all regions in the boundary area
     for (int i = 0; i < markers.rows; i++)
     {
@@ -79,6 +102,38 @@ vector<int> findNeighbors(const Mat &markers, int region_id, int total_regions)
                 int neighbor_id = markers.at<int>(i, j);
                 if (neighbor_id > 0 && neighbor_id != region_id && neighbor_id <= total_regions)
                 {
+                    // Only print when we first find a neighbor
+                    if (!is_neighbor[neighbor_id])
+                    {
+                        cout << "  Found neighbor " << neighbor_id << " at position (" << j << "," << i << ")" << endl;
+
+                        // Store the meeting point with both region IDs
+                        // We'll store the point only once for each region pair (lower ID first)
+                        if (region_id < neighbor_id)
+                        {
+                            adjacency_points.push_back({Point(j, i), {region_id, neighbor_id}});
+                            // old region_id and neighbor_id are not in the same field
+                            // region_id, 1~...
+                            // neighbor_id, which is markers.at<int>(i, j), has nothing to do with region_id
+                            // changed region_id to markers value to fix this
+                        }
+
+                        // // Mark this point in the debug visualization if it's one of our focus regions
+                        // if ((region_id == 3 && neighbor_id == 10) || (region_id == 10 && neighbor_id == 3))
+                        // {
+                        //     if (!debug_vis.empty())
+                        //     {
+                        //         // Draw a bright yellow marker at the adjacency point
+                        //         circle(debug_vis, Point(j, i), 3, Scalar(0, 255, 255), -1);
+
+                        //         // Save the debug image for inspection
+                        //         string filename = "debug_region_" + to_string(region_id) +
+                        //                           "_neighbor_" + to_string(neighbor_id) + ".png";
+                        //         imwrite(filename, debug_vis);
+                        //         cout << "  Saved debug image to " << filename << endl;
+                        //     }
+                        // }
+                    }
                     is_neighbor[neighbor_id] = true;
                 }
             }
@@ -100,11 +155,23 @@ vector<int> findNeighbors(const Mat &markers, int region_id, int total_regions)
 // Function to build adjacency list for regions
 vector<vector<int>> buildAdjacencyList(const Mat &markers, int total_regions)
 {
-    vector<vector<int>> adjacency_list(total_regions + 1);
+    // Clear the global adjacency points vector before building a new adjacency list
+    adjacency_points.clear();
 
-    for (int region = 1; region <= total_regions; region++)
+    vector<vector<int>> adjacency_list(total_regions + 1);
+    vector<bool> visited_regions(total_regions, false);
+
+    for (int i = 0; i < markers.rows; i++)
     {
-        adjacency_list[region] = findNeighbors(markers, region, total_regions);
+        for (int j = 0; j < markers.cols; j++)
+        {
+            int region = markers.at<int>(i, j);
+            if (region > 0 && !visited_regions[region])
+            {
+                visited_regions[region] = true;
+                adjacency_list[region] = findNeighbors(markers, region, total_regions);
+            }
+        }
     }
 
     // Print adjacency list for debugging
@@ -255,65 +322,58 @@ int getMostConnectedRegion(const vector<vector<int>> &adjacency_list, int total_
     return most_connected_region;
 }
 
-// TODO automatic stress test
-int main(int argc, char **argv)
+// New helper functions
+// Initialize image, parameters, and masks
+void initApp(vector<Point> &seeds)
 {
-    int k = 0;
     double default_temperature = 0.01;
     double default_sigma = 1.02;
-    vector<Point> seeds;
-
     task2_next_step = INPUT_IMAGE;
-    string default_image = "../image/fruits.jpg";
-    img0 = get_image(default_image); // Fix: Assign return value to img0
-
-    // Print image size for logging
-    // std::cout << "Loaded image: " << filepath << std::endl;
-    std::cout << "Image size: " << img0.cols << "x" << img0.rows << " pixels" << std::endl;
-    // std::cout << "Total area: " << img0.cols * img0.rows << " pixels" << std::endl;
-
-    RNG rng(getTickCount());
+    string default_image = "image/fruits.jpg";
+    img0 = get_image(default_image);
+    cout << "Image size: " << img0.cols << "x" << img0.rows << " pixels" << endl;
 
     task2_next_step = INPUT_K;
     k = get_k(k_min, k_max);
 
     task2_next_step = INPUT_TEMP;
-    double temperature = get_temperature(0, 1, default_temperature);
+    temperature = get_temperature(0, 1, default_temperature);
 
     task2_next_step = INPUT_SIGMA;
-    double sigma = get_sigma(1, 2, default_sigma);
+    sigma = get_sigma(1, 2, default_sigma);
 
     print_task2_help();
 
-    // Create windows
-    namedWindow("image", 1);
-    namedWindow("watershed transform", 1);
-    namedWindow("four color result", 1);
-
-    // Initialize images
     img = img0.clone();
     img_gray = img0.clone();
     wshed = img0.clone();
-
     marker_mask = Mat::zeros(img.size(), CV_32SC1);
     markers = Mat::zeros(img.size(), CV_32SC1);
-
     cvtColor(img, marker_mask, COLOR_BGR2GRAY);
     cvtColor(marker_mask, img_gray, COLOR_GRAY2BGR);
+}
 
+// Setup display windows
+void setupWindows()
+{
+    namedWindow("image", 1);
+    namedWindow("watershed transform", 1);
+    namedWindow("four color result", 1);
     imshow("image", img);
     imshow("watershed transform", wshed);
-    // setMouseCallback("image", on_mouse, 0);
     task2_next_step = GENERATE_SEEDS;
+}
 
-    // Main loop
+// Main event loop handling all key commands
+void runEventLoop(vector<Point> &seeds)
+{
+    RNG rng(getTickCount());
+
     for (;;)
     {
         int c = waitKey(0);
-
         if (c == 27 || c == 'q')
             break;
-
         if (c == 'h')
         {
             print_task2_help();
@@ -328,7 +388,7 @@ int main(int argc, char **argv)
         }
         if (c == 'v' && task2_next_step == WATERSHED)
         {
-            visualize_seeds("image", img, seeds, 200);
+            visualize_points("image", img, seeds, 200);
         }
         if (c == 'g') // generate seeds
         {
@@ -337,6 +397,8 @@ int main(int argc, char **argv)
 
             // Call generate_seeds with marker_mask as a parameter
             seeds = generate_seeds(img0, marker_mask, k, temperature, sigma);
+            // seeds: Vector of Points representing the locations of seed points for watershed segmentation
+            // These points are the centers of initial regions that will grow during watershed
             task2_next_step = WATERSHED;
         }
         if (c == 'w' && task2_next_step == WATERSHED)
@@ -346,6 +408,9 @@ int main(int argc, char **argv)
 
             // Find contours in marker_mask and use them as regions
             vector<vector<Point>> contours;
+            // contours: Vector of point vectors, each representing a continuous outline in the marker_mask
+            // Each contour represents the boundary of a seed region and will become a watershed marker
+
             findContours(marker_mask, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
             printf("Found %zu contours for watershed\n", contours.size());
@@ -367,6 +432,8 @@ int main(int argc, char **argv)
                 int r = rng.uniform(0, 255);
                 color_tab.push_back(Vec3b((uchar)b, (uchar)g, (uchar)r));
             }
+
+            // pause();
 
             double t = (double)getTickCount();
             watershed(img0, markers); // Perform watershed
@@ -392,21 +459,21 @@ int main(int argc, char **argv)
             // Visualize the seed points on the watershed result image
             Mat wshed_with_seeds = wshed.clone();
 
-            visualize_seeds("watershed transform", wshed_with_seeds, seeds, 200);
+            visualize_points("watershed transform", wshed_with_seeds, seeds, 200);
 
             task2_next_step = FOURCOLOR;
         }
         if (c == 'c' && task2_next_step == FOURCOLOR)
         {
             // Get total number of regions (max marker value excluding boundaries and background)
-            int total_regions = 0;
-            for (int i = 0; i < markers.rows; i++)
-            {
-                for (int j = 0; j < markers.cols; j++)
-                {
-                    total_regions = max(total_regions, markers.at<int>(i, j));
-                }
-            }
+            int total_regions = seeds.size(); // 1~seeds.size()
+            // for (int i = 0; i < markers.rows; i++)
+            // {
+            //     for (int j = 0; j < markers.cols; j++)
+            //     {
+            //         total_regions = max(total_regions, markers.at<int>(i, j));
+            //     }
+            // }
 
             cout << "Total regions for four-coloring: " << total_regions << endl;
 
@@ -529,6 +596,40 @@ int main(int argc, char **argv)
             // Display the four-color result with seed points
             imshow("four color result", four_color_with_seeds);
 
+            // Create a copy to visualize adjacency points
+            Mat adjacency_vis = four_color_with_seeds.clone();
+
+            // Visualize all adjacency points
+            vector<Point> adj_points_only;
+            for (const auto &pair : adjacency_points)
+            {
+                adj_points_only.push_back(pair.first);
+
+                // Draw a small cross at each adjacency point
+                Point p = pair.first;
+                int r1 = pair.second.first;
+                int r2 = pair.second.second;
+
+                // Add text to show which regions meet here
+                string text = to_string(r1) + "-" + to_string(r2);
+                putText(adjacency_vis, text, Point(p.x + 5, p.y - 5),
+                        FONT_HERSHEY_SIMPLEX, 0.3, Scalar(255, 255, 255), 1, LINE_AA);
+
+                // Draw a small cross
+                line(adjacency_vis, Point(p.x - 2, p.y - 2), Point(p.x + 2, p.y + 2), Scalar(0, 0, 0), 2);
+                line(adjacency_vis, Point(p.x + 2, p.y - 2), Point(p.x - 2, p.y + 2), Scalar(0, 0, 0), 2);
+                circle(adjacency_vis, p, 3, Scalar(255, 255, 255), 1);
+            }
+
+            // Show the visualization with all adjacency points
+            imshow("adjacency points", adjacency_vis);
+
+            // Use the provided visualize_points function to show the points
+            if (!adj_points_only.empty())
+            {
+                visualize_points("adjacency visualization", four_color_result, adj_points_only, adj_points_only.size());
+            }
+
             // Verify that the four-coloring is valid
             bool valid_coloring = true;
             for (int region = 1; region <= total_regions; region++)
@@ -554,6 +655,15 @@ int main(int argc, char **argv)
             }
         }
     }
+}
 
+// Replace existing main with simplified version
+int main(int argc, char **argv)
+{
+
+    vector<Point> seeds;
+    initApp(seeds);
+    setupWindows();
+    runEventLoop(seeds);
     return 0;
 }

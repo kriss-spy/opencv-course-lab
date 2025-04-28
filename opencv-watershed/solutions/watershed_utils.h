@@ -7,6 +7,13 @@
 #include <iostream>
 #include <string>
 #include <random>
+#ifdef _WIN32
+#include <direct.h>
+#define getcwd _getcwd
+#else
+#include <unistd.h>
+#endif
+#include <climits> // For PATH_MAX
 
 using namespace cv;
 using namespace std;
@@ -70,9 +77,25 @@ void print_task2_help()
            "\tc - perform four color\n");
 }
 
+// Print current directory for debugging
+void print_current_dir()
+{
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) != NULL)
+    {
+        cout << "Current working directory: " << cwd << endl;
+    }
+    else
+    {
+        perror("getcwd() error");
+    }
+}
+
 // Get image from user input or use default
 Mat get_image(string default_path)
 {
+    print_current_dir();
+
     Mat img0;
     cout << "please input image in image/ folder" << endl;
     cout << "press enter to use default image fruits.jpg" << endl;
@@ -297,33 +320,26 @@ double calculateDistance(const Point &p1, const Point &p2)
 }
 
 // Visualize seeds on the image
-void visualize_seeds(string window_title, const Mat &img, const vector<Point> &seeds, int max_seed_num)
+void visualize_points(string window_title, const Mat &img, const vector<Point> &points,
+                      int max_numbered_points = 50,
+                      const Scalar &point_color = Scalar(0, 255, 255),
+                      int radius = 3,
+                      bool show_numbers = true)
 {
     Mat display = img.clone();
 
-    if (seeds.size() > max_seed_num)
+    // Draw all points
+    for (int i = 0; i < points.size(); i++)
     {
-        // Draw circles on the original image
-        for (int i = 0; i < seeds.size(); i++)
-        {
-            // Draw a visible circle at each seed point
-            // Use a contrasting color that stands out on most images
-            circle(display, seeds[i], 3, Scalar(0, 255, 255), FILLED);
-            circle(display, seeds[i], 3, Scalar(0, 0, 0), 1); // Black outline for contrast
-        }
-    }
-    else
-    {
-        // Draw circles and numbers on the original image
-        for (int i = 0; i < seeds.size(); i++)
-        {
-            // Draw a visible circle at each seed point
-            // Use a contrasting color that stands out on most images
-            circle(display, seeds[i], 3, Scalar(0, 255, 255), FILLED);
-            circle(display, seeds[i], 3, Scalar(0, 0, 0), 1); // Black outline for contrast
+        // Draw a visible circle at each point
+        circle(display, points[i], radius, point_color, FILLED);
+        circle(display, points[i], radius, Scalar(0, 0, 0), 1); // Black outline for contrast
 
-            // Place the seed number next to the point
-            Point textPos(seeds[i].x + 5, seeds[i].y + 5);
+        // Only show numbers if requested and if there aren't too many points
+        if (show_numbers && points.size() <= max_numbered_points)
+        {
+            // Place the point number next to the point
+            Point textPos(points[i].x + 5, points[i].y + 5);
 
             putText(display, to_string(i + 1), textPos, FONT_HERSHEY_SIMPLEX,
                     0.4, Scalar(0, 0, 0), 2, LINE_AA); // Outlined text (thicker)
@@ -336,7 +352,7 @@ void visualize_seeds(string window_title, const Mat &img, const vector<Point> &s
     imshow(window_title, display);
 
     // Print summary information
-    printf("Visualized %zu seed points\n", seeds.size());
+    printf("Visualized %zu seed points in %s\n", points.size(), window_title.c_str());
 }
 bool try_adjust_seeds(Point &seed, vector<Point> &violation_seeds, double min_dist, const Mat &marker_mask)
 {

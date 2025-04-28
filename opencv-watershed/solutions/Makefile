@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -I/usr/include/opencv4 -DDEBUG -g -Wall
+CXXFLAGS = -I/usr/include/opencv4 -DDEBUG -g # -Wall
 LDFLAGS = -L/usr/lib -lopencv_core -lopencv_imgcodecs -lopencv_highgui -lopencv_imgproc
 
 all: build/task1 build/task2 # build/task3

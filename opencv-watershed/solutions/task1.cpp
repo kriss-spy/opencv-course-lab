@@ -114,7 +114,7 @@ int main(int argc, char **argv)
         }
         if (c == 'v' && task1_next_step == WATERSHED)
         {
-            visualize_seeds(img, seeds);
+            visualize_points("image", img, seeds, 200);
         }
         if (c == 'g') // generate seeds
         {
