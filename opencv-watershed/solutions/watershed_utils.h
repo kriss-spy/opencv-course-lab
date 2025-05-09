@@ -1133,7 +1133,7 @@ vector<pair<int, int>> get_area_values(Mat &markers)
         int area_value = entry.second;
         if (area_value > 0) // Ensure area is greater than 0
         {
-            result.push_back({area_value, marker_id});
+            result.push_back({marker_id, area_value});
         }
     }
     return result;
@@ -1142,8 +1142,165 @@ vector<pair<int, int>> get_area_values(Mat &markers)
 void heap_sort(vector<pair<int, int>> &area_values)
 {
     sort(area_values.begin(), area_values.end(), [](pair<int, int> a, pair<int, int> b)
-         { return a.first < b.first; });
+         { return a.second < b.second; });
     // TODO use heap sort instead
+}
+int binary_search(vector<pair<int, int>> &area_values, int val, bool is_lower_bound)
+{
+    int l = 0;
+    int r = area_values.size();
+    int m = 0;
+    if (is_lower_bound)
+    {
+        // 1 3 5
+        // 4
+        // l r m
+        // 0 3 1
+        // 2 3 2
+        // 2 2 2
+        while (l < r)
+        {
+            m = (l + r) / 2;
+            if (area_values[m].second == val)
+            {
+                return m;
+            }
+            else if (area_values[m].second > val)
+            {
+                r = m;
+            }
+            else
+            {
+                l = m + 1;
+            }
+        }
+        if (area_values[l].second > val)
+        {
+            return l;
+        }
+        else
+        {
+            cout << "ERROR: can't find area value bigger than " << val << endl;
+            return -1;
+        }
+    }
+    else
+    {
+        // 1 3 5
+        // 4
+        // l r m
+        // 0 3 1
+        // 1 3 2
+        // 1 1 2
+        while (l < r)
+        {
+            m = (l + r) / 2;
+            if (area_values[m].second == val)
+            {
+                return m;
+            }
+            else if (area_values[m].second > val)
+            {
+                r = m - 1;
+            }
+            else
+            {
+                l = m;
+            }
+        }
+        if (area_values[l].second < val)
+        {
+            return l;
+        }
+        else
+        {
+            cout << "ERROR: can't find area value less than " << val << endl;
+            return -1;
+        }
+    }
+}
+
+// Get area range from user input
+void get_area_range(int &lower_bound, int &upper_bound, int min_possible_area, int max_possible_area)
+{
+    std::cout << "Please input the lower bound for area search." << std::endl;
+    if (min_possible_area <= max_possible_area && min_possible_area >= 0)
+    {
+        std::cout << "Min recorded area is " << min_possible_area << ". Example: " << min_possible_area << std::endl;
+    }
+
+    while (true)
+    {
+        std::cout << "Lower bound > ";
+        std::string input;
+        std::getline(std::cin, input);
+        if (!input.empty())
+        {
+            try
+            {
+                lower_bound = std::stoi(input);
+                if (lower_bound < 0)
+                {
+                    std::cout << "Area cannot be negative. Please enter a valid non-negative number." << std::endl;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            catch (const std::invalid_argument &e)
+            {
+                std::cout << "Invalid input! Please enter a valid number." << std::endl;
+            }
+            catch (const std::out_of_range &e)
+            {
+                std::cout << "Input is too large! Please enter a valid number." << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "Please input a lower bound!" << std::endl;
+        }
+    }
+
+    std::cout << "Please input the upper bound for area search." << std::endl;
+    if (min_possible_area <= max_possible_area && max_possible_area >= 0)
+    {
+        std::cout << "Max recorded area is " << max_possible_area << ". Example: " << max_possible_area << std::endl;
+    }
+    while (true)
+    {
+        std::cout << "Upper bound > ";
+        std::string input;
+        std::getline(std::cin, input);
+        if (!input.empty())
+        {
+            try
+            {
+                upper_bound = std::stoi(input);
+                if (upper_bound < lower_bound)
+                {
+                    std::cout << "Upper bound cannot be less than lower bound (" << lower_bound << ")." << std::endl;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            catch (const std::invalid_argument &e)
+            {
+                std::cout << "Invalid input! Please enter a valid number." << std::endl;
+            }
+            catch (const std::out_of_range &e)
+            {
+                std::cout << "Input is too large! Please enter a valid number." << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "Please input an upper bound!" << std::endl;
+        }
+    }
 }
 
 // WATERSHED_UTILS_H
