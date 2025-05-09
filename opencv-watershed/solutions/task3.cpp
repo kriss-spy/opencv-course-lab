@@ -25,6 +25,8 @@
 #include <queue>             // For Huffman priority_queue
 #include <map>               // For Huffman codes map
 #include <string>            // For Huffman codes
+#include <fstream>           // For file output (DOT file)
+#include <cstdlib>           // For system() call
 #include "watershed_utils.h" // Include the utility functions
 
 using namespace cv;
@@ -113,6 +115,103 @@ void debugPrintHuffmanTreeRecursive(HuffmanNode *node, string current_code, int 
     }
 }
 #endif
+
+// Recursively generates DOT representation for nodes and edges
+// Returns the unique ID assigned to the current node
+int generateDotRecursive(HuffmanNode *node, ofstream &out_file, const map<int, string> &codes, int &node_id_counter)
+{
+    if (!node)
+    {
+        // This case should ideally not be reached if called on a valid tree root.
+        // However, if it can, returning a distinct value or handling it is important.
+        return -1; // Indicates no node was processed, or an invalid node.
+    }
+
+    int current_node_id = node_id_counter++;
+    string label_str;
+
+#ifdef VERBOSE
+    if (node->label != -1)
+    { // Leaf node
+        string code_str = "N/A";
+        if (codes.count(node->label))
+        {
+            code_str = codes.at(node->label);
+            // Huffman code for a single symbol tree is often "0"
+            if (code_str.empty() && codes.size() == 1 && node->area > 0)
+            {
+                code_str = "0";
+            }
+        }
+        // DOT language uses \\n for newlines inside labels with record shape
+        label_str = "Label: " + to_string(node->label) + "\\nArea: " + to_string(node->area) + "\\nCode: " + code_str;
+    }
+    else
+    { // Internal node
+        label_str = "Internal\\nArea: " + to_string(node->area);
+    }
+#else // Not VERBOSE, make labels concise
+    if (node->label != -1)
+    { // Leaf node
+        label_str = "L" + to_string(node->label) + ": " + to_string(node->area);
+    }
+    else
+    { // Internal node
+        label_str = to_string(node->area);
+    }
+#endif
+
+    out_file << "  node" << current_node_id << " [label=\"" << label_str << "\"];\n";
+
+    if (node->left)
+    {
+        int left_child_id = generateDotRecursive(node->left, out_file, codes, node_id_counter);
+        if (left_child_id != -1)
+        { // Ensure left child was valid before creating edge
+            out_file << "  node" << current_node_id << " -> node" << left_child_id << " [label=\"0\"];\n";
+        }
+    }
+    if (node->right)
+    {
+        int right_child_id = generateDotRecursive(node->right, out_file, codes, node_id_counter);
+        if (right_child_id != -1)
+        { // Ensure right child was valid
+            out_file << "  node" << current_node_id << " -> node" << right_child_id << " [label=\"1\"];\n";
+        }
+    }
+    return current_node_id;
+}
+
+// Generates the complete DOT file for the Huffman tree
+void generateHuffmanDotFile(HuffmanNode *root, const map<int, string> &codes, const string &filename)
+{
+    ofstream out_file(filename);
+    if (!out_file.is_open())
+    {
+        cerr << "Error: Could not open DOT file for writing: " << filename << endl;
+        return;
+    }
+
+    out_file << "digraph HuffmanTree {\n";
+    out_file << "  rankdir=TB; // Top-to-Bottom layout\n";
+    out_file << "  graph [dpi=48]; // Set DPI for scaling (e.g., 48 for ~50% if default is ~96)\n";
+    out_file << "  node [shape=record, style=rounded, fontname=\"Helvetica\"];\n";
+    out_file << "  edge [fontname=\"Helvetica\"];\n";
+
+    if (root)
+    {
+        int node_id_counter = 0;
+        generateDotRecursive(root, out_file, codes, node_id_counter);
+    }
+    else
+    {
+        out_file << "  empty [label=\"Empty Tree\"];\n";
+    }
+
+    out_file << "}\n";
+    out_file.close();
+}
+// --- End of Graphviz DOT file generation ---
 
 // Recursive function to generate Huffman codes
 void generateHuffmanCodesRecursive(HuffmanNode *root, string current_code, map<int, string> &huffman_codes_map)
@@ -204,12 +303,19 @@ map<int, string> performHuffmanCoding(const vector<pair<int, int>> &regions_data
 
     generateHuffmanCodesRecursive(root, "", huffman_codes_map);
 
+    // Call to generate DOT file before deleting the root
+    if (root)
+    { // Ensure root is not null before trying to generate DOT file
+        generateHuffmanDotFile(root, huffman_codes_map, "huffman_tree.dot");
+        // cout << "Generated huffman_tree.dot for Graphviz." << endl; // Moved to main loop for better user feedback
+    }
+
     delete root; // This will recursively delete all nodes if destructor is set up correctly.
 
     return huffman_codes_map;
 }
 
-// --- End of Huffman Coding Structures and Functions ---
+// --- Helper functions for Graphviz DOT file generation ---
 
 // New helper functions for task3
 void initApp_task3(vector<Point> &seeds)
@@ -623,8 +729,48 @@ void runEventLoop_task3(vector<Point> &seeds)
                     }
                 }
                 // --- End of Huffman Coding ---
+                // --- Visualize Huffman Tree using Graphviz ---
+                cout << endl
+                     << "Attempting to generate Huffman tree image using Graphviz..." << endl;
+                // Check if huffman_tree.dot was generated (e.g. if regions_in_range was not empty and huffman coding produced a tree)
+                // The dot file is generated within performHuffmanCoding if root is not null.
+                // We assume if huffman_codes is not empty, a tree was attempted.
+                if (!huffman_codes.empty() || (regions_in_range.size() == 1 && regions_in_range[0].first > 0))
+                {
+                    // The file "huffman_tree.dot" should exist if performHuffmanCoding created a tree.
+                    int result = system("dot -Tpng huffman_tree.dot -o huffman_tree.png");
+                    if (result == 0)
+                    {
+                        Mat tree_image = imread("huffman_tree.png");
+                        if (!tree_image.empty())
+                        {
+                            namedWindow("Huffman Tree", WINDOW_AUTOSIZE);
+                            imshow("Huffman Tree", tree_image);
+                            cout << "Huffman tree image 'huffman_tree.png' generated and displayed." << endl;
+                            cout << "Close the 'Huffman Tree' window to exit or continue." << endl;
+                        }
+                        else
+                        {
+                            cout << "Failed to load huffman_tree.png. 'dot' command might have succeeded but image is invalid or not found." << endl;
+                        }
+                    }
+                    else
+                    {
+                        cout << "Failed to execute Graphviz 'dot' command (exit code: " << result << "). Ensure Graphviz is installed and 'dot' is in your system's PATH." << endl;
+                        cout << "You can manually convert 'huffman_tree.dot' using: dot -Tpng huffman_tree.dot -o huffman_tree.png" << endl;
+                    }
+                }
+                else if (regions_in_range.empty())
+                {
+                    // No regions, so no tree to visualize. Message already printed.
+                }
+                else
+                {
+                    cout << "No Huffman tree was generated (e.g., all regions had zero area), so no visualization." << endl;
+                }
+                // --- End of Huffman Tree Visualization ---
             }
-            task3_next_step = HUFFMAN_TREE;
+            task3_next_step = EXIT; // Set next step to EXIT as requested
         }
     }
 }
