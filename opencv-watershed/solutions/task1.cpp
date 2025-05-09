@@ -32,11 +32,7 @@ using namespace std;
 // Global variables
 Mat marker_mask, markers, img0, img, img_gray, wshed;
 Point prev_pt(-1, -1);
-NextStep task1_next_step;
-
-// Add this helper function to verify minimum distances
-// Jittered grid vs Poisson disc
-// https://www.redblobgames.com/x/1830-jittered-grid/
+NextStep task3_next_step;
 
 const int k_min = 1;
 const int k_max = 5000; // TODO choose proper values for k range
@@ -50,7 +46,7 @@ int main(int argc, char **argv)
     double default_sigma = 1.02;
     vector<Point> seeds;
 
-    task1_next_step = INPUT_IMAGE;
+    task3_next_step = INPUT_IMAGE;
     string default_image = "../image/fruits.jpg";
     img0 = get_image(default_image);
 
@@ -61,13 +57,13 @@ int main(int argc, char **argv)
 
     RNG rng(getTickCount());
 
-    task1_next_step = INPUT_K;
+    task3_next_step = INPUT_K;
     k = get_k(k_min, k_max);
 
-    task1_next_step = INPUT_TEMP;
+    task3_next_step = INPUT_TEMP;
     double temperature = get_temperature(0, 1, default_temperature);
 
-    task1_next_step = INPUT_SIGMA;
+    task3_next_step = INPUT_SIGMA;
     double sigma = get_sigma(1, 2, default_sigma);
 
     print_task1_help();
@@ -88,7 +84,7 @@ int main(int argc, char **argv)
     imshow("image", img);
     imshow("watershed transform", wshed);
     // setMouseCallback("image", on_mouse, 0);
-    task1_next_step = GENERATE_SEEDS;
+    task3_next_step = GENERATE_SEEDS;
 
     // Main loop
     for (;;)
@@ -112,7 +108,7 @@ int main(int argc, char **argv)
             wshed = img0.clone();
             imshow("watershed transform", wshed);
         }
-        if (c == 'v' && task1_next_step == WATERSHED)
+        if (c == 'v' && task3_next_step == WATERSHED)
         {
             visualize_points("image", img, seeds, 200);
         }
@@ -123,9 +119,9 @@ int main(int argc, char **argv)
 
             seeds = generate_seeds(img0, marker_mask, k, temperature, sigma);
             // seeds = cyj_generateSeeds(k, img0.rows, img0.cols);
-            task1_next_step = WATERSHED;
+            task3_next_step = WATERSHED;
         }
-        if (c == 'w' && task1_next_step == WATERSHED)
+        if (c == 'w' && task3_next_step == WATERSHED)
         {
             // Clear markers before watershed
             markers = Mat::zeros(marker_mask.size(), CV_32SC1);

@@ -1,3 +1,5 @@
+// parent: task1.cpp
+
 // 使用邻接表统计分水岭结果中各区域的邻接关系
 // 并采用四原色法（合理选择初始着色区域，并基于图的广度优先遍历，采用队列对其他待着色区域进行着色顺利梳理，加速全图着色过程）
 // 对分水岭结果重新着色（使用堆栈+回溯策略，优化回退率）
@@ -306,7 +308,7 @@ int getMostConnectedRegion(const vector<vector<int>> &adjacency_list, int total_
 
 // New helper functions
 // Initialize image, parameters, and masks
-void initApp(vector<Point> &seeds)
+void initApp_task2(vector<Point> &seeds)
 {
     print_welcome();
     print_task2_help();
@@ -337,7 +339,7 @@ void initApp(vector<Point> &seeds)
 }
 
 // Setup display windows
-void setupWindows()
+void setupWindows_task2()
 {
     namedWindow("image", 1);
     namedWindow("watershed transform", 1);
@@ -351,7 +353,7 @@ void setupWindows()
 }
 
 // Main event loop handling all key commands
-void runEventLoop(vector<Point> &seeds)
+void runEventLoop_task2(vector<Point> &seeds)
 {
     RNG rng(getTickCount());
     int comp_count = 0; // Moved comp_count to a scope accessible by both 'w' and 'c' if needed, or use global.
@@ -643,8 +645,8 @@ int main(int argc, char **argv)
 {
 
     vector<Point> seeds;
-    initApp(seeds);
-    setupWindows();
-    runEventLoop(seeds);
+    initApp_task2(seeds);
+    setupWindows_task2();
+    runEventLoop_task2(seeds);
     return 0;
 }

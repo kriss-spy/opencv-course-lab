@@ -28,6 +28,9 @@ enum NextStep
     GENERATE_SEEDS,
     WATERSHED,
     FOURCOLOR,
+    HEAP_SORT_AREA,
+    MARK_AREA_WITHIN_RANGE,
+    HUFFMAN_TREE,
     EXIT
 };
 
@@ -75,6 +78,20 @@ void print_task2_help()
            //    "\tc - clear input and restart\n"
            "\tw - run watershed\n"
            "\tc - perform four color\n");
+}
+
+void print_task3_help()
+{
+    // Print instructions
+    printf("Hot keys: \n"
+           "\tESC or q - quit the program\n"
+           "\tr - restore the original image\n"
+           "\tg - generate seeds\n"
+           "\tv - visualize generated seeds\n"
+           //    "\tc - clear input and restart\n"
+           "\tw - run watershed\n"
+           "\ts - sort area values and print min and max\n"
+           "\th - input search range, mark areas, draw huffman tree");
 }
 
 // Print current directory for debugging
@@ -1089,4 +1106,37 @@ void print_welcome() // TODO print_welcome
 {
     cout << "===" << "opencv watershed lab program" << "===" << endl;
 }
-#endif // WATERSHED_UTILS_H
+#endif
+vector<pair<int, int>> get_area_values(Mat &markers) // TODO debug handwritten code
+{
+    // pair.first: marker id
+    // pair.second: area value of the region
+    unordered_map<int, int> area_values;
+    for (int r = 0; r < markers.rows; r++)
+    {
+        for (int c = 0; c < markers.cols; c++)
+        {
+            int area_id = markers.at<int>(r, c);
+            if (area_id == -1)
+                continue;
+            area_values[area_id]++;
+        }
+    }
+    // Convert map to vector of pairs
+    vector<pair<int, int>> result;
+    result.reserve(area_values.size());
+    for (const auto &entry : area_values)
+    {
+        result.push_back({entry.first, entry.second});
+    }
+    return result;
+}
+
+void heap_sort(vector<pair<int, int>> &area_values)
+{
+    sort(area_values.begin(), area_values.end(), [](pair<int, int> a, pair<int, int> b)
+         { return a.first < b.first; });
+    // TODO use heap sort instead
+}
+
+// WATERSHED_UTILS_H
