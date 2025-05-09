@@ -1068,8 +1068,8 @@ vector<Point> generate_seeds(const Mat &img, Mat &marker_mask, int k, double tem
     marker_mask = Mat::zeros(img.size(), CV_8UC1);
 
     // generate k random seed points in marker_mask
-    vector<Point> seeds = jittered_grid_sample(marker_mask, k, temperature);
-    // vector<Point> seeds = jittered_hex_grid_sample(marker_mask, k, temperature, sigma, true);
+    // vector<Point> seeds = jittered_grid_sample(marker_mask, k, temperature);
+    vector<Point> seeds = jittered_hex_grid_sample(marker_mask, k, temperature, sigma, true);
 
     // Draw smaller circles for markers to avoid overlapping
     // But use distinct values for each region

@@ -144,4 +144,14 @@ def cli():
 
 
 if __name__ == "__main__":
-    cli()
+    M, N, K = 600, 600, 100
+    points = jittered_grid_sampling(M, N, K, seed=45, temperature=0)
+
+    plt.figure(figsize=(8, 6))
+    xs, ys = zip(*points)
+    plt.scatter(xs, ys, s=10, color="blue")
+    plt.xlim(0, N)
+    plt.ylim(0, M)
+    plt.gca().invert_yaxis()
+    plt.title(f"Jittered Grid Sampling (K={K})")
+    plt.show()
