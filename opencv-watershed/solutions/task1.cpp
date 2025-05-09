@@ -45,13 +45,13 @@ int main(int argc, char **argv)
     print_task1_help();
 
     int k = 0;
-    // default_temperature = 0.01;
+    // double default_temperature = 0.01;
     // double default_sigma = 1.02;
     vector<Point> seeds;
 
     task1_next_step = INPUT_IMAGE;
-    string default_image = "image/fruits.jpg";
-    img0 = get_image(default_image);
+    // string default_image = "image/fruits.jpg";
+    img0 = get_image();
 
     // Print image size for logging
     // std::cout << "Loaded image: " << filepath << std::endl;

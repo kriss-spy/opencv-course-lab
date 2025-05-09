@@ -236,8 +236,9 @@ void print_current_dir()
 }
 
 // Get image from user input or use default
-Mat get_image(string default_path)
+Mat get_image()
 {
+    string default_path = "image/conbini-trolley.jpg";
     print_current_dir();
 
     Mat img0;

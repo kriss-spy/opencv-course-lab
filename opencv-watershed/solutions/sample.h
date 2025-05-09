@@ -164,8 +164,10 @@ void visualize_regions(string window_title, const Mat &img, const vector<Point> 
 std::vector<cv::Point>
 jittered_hex_grid_sample(const cv::Mat &marker_mask,
                          int k,
-                         double temperature = 1.0)
+                         double temperature = 0)
 {
+    // Temperature is now implemented.
+
     using cv::Point2d; // sub-pixel helper
     const int M = marker_mask.rows, N = marker_mask.cols;
     if (k <= 0)
@@ -184,6 +186,11 @@ jittered_hex_grid_sample(const cv::Mat &marker_mask,
     std::vector<Point2d> candidates;
     cv::RNG rng(static_cast<uint64_t>(std::random_device{}())); // Fixed BUG: Use random_device for seed
 
+    // Try multiple grid offsets to get the best coverage
+    const int NUM_OFFSET_TRIES = 5;
+    std::vector<Point2d> best_candidates;
+    int best_candidate_count = 0;
+
     // -------------- adaptive lattice until we can fit >= k --------------------
     while (true)
     {
@@ -196,63 +203,160 @@ jittered_hex_grid_sample(const cv::Mat &marker_mask,
         double r_jit = 0.5 * (d_cc - (d_req + SAFETY));
         const double r_in = 0.5 * std::sqrt(3.0) * s; // in-radius
         r_jit = std::min(r_jit, 0.95 * r_in);
+        if (r_jit < 0.0)
+            r_jit = 0.0; // Ensure r_jit is non-negative
 
-        const double pad = r_jit;             // grid overscan
+        // Calculate padding for grid scanning based on actual jitter reach
+        const double actual_max_jitter_offset = (temperature > 1e-9 && r_jit > 1e-9) ? (r_jit * temperature) : 0.0;
+        const double grid_scan_pad = actual_max_jitter_offset;
+
+        // Try multiple grid offsets to get better coverage
+        best_candidates.clear();
+        best_candidate_count = 0;
+
+        // Original dx and dy for the hex grid
         const double dx = std::sqrt(3.0) * s; // lattice step x
         const double dy = 1.5 * s;            // lattice step y
 
-        candidates.clear();
-        int int_row_idx = 0;                                       // Integer row index for staggering
-        for (double y = -pad; y < M + pad; y += dy, ++int_row_idx) // y is the y-center
+        for (int offset_try = 0; offset_try < NUM_OFFSET_TRIES; offset_try++)
         {
-            // Fixed BUG: Use integer row index for robust staggering logic
-            const double x0 = (int_row_idx & 1 ? 0.5 * dx : 0.0) - pad;
-            for (double x = x0; x < N + pad; x += dx) // x is the x-center
+            // Generate random offsets for this try
+            double offset_x = rng.uniform(0.0, dx * 0.95);
+            double offset_y = rng.uniform(0.0, dy * 0.95);
+
+            candidates.clear();
+            int int_row_idx = 0;
+
+            // Extend grid into padding to cover edges better
+            double extra_scan_pad = d_req * 0.5; // Extra padding to ensure edge coverage
+
+            // Start grid from -extra_scan_pad to ensure top coverage
+            for (double y = -extra_scan_pad; y < M + grid_scan_pad; y += dy, ++int_row_idx)
             {
-                const double rho = rng.uniform(0.0, r_jit);
-                const double theta = rng.uniform(0.0, 2 * CV_PI);
-                const double px = x + rho * std::cos(theta);
-                const double py = y + rho * std::sin(theta);
-                if (0 <= px && px < N && 0 <= py && py < M)
-                    candidates.emplace_back(px, py);
+                const double x0 = (int_row_idx & 1 ? 0.5 * dx : 0.0) - grid_scan_pad + offset_x;
+                for (double x = x0; x < N + grid_scan_pad; x += dx)
+                {
+                    double final_px = x;            // Initialize with cell center x
+                    double final_py = y + offset_y; // Apply y offset
+
+                    // Apply jitter only if temperature and max potential jitter (r_jit) are positive
+                    if (temperature > 1e-9 && r_jit > 1e-9)
+                    {
+                        const double actual_jitter_radius_for_sampling = r_jit * temperature;
+                        if (actual_jitter_radius_for_sampling > 1e-9)
+                        {
+                            const double rho = rng.uniform(0.0, actual_jitter_radius_for_sampling);
+                            const double theta = rng.uniform(0.0, 2 * CV_PI);
+                            final_px += rho * std::cos(theta);
+                            final_py += rho * std::sin(theta);
+                        }
+                    }
+
+                    // Add the point if it's within image bounds
+                    if (0 <= final_px && final_px < N && 0 <= final_py && final_py < M)
+                        candidates.emplace_back(final_px, final_py);
+                }
             }
-        }
-        if (static_cast<int>(candidates.size()) >= k)
-            break;
-        shrink *= 0.98; // 2 % denser and try again
-    }
 
-    if (static_cast<int>(candidates.size()) < k)
-    {
-        print_sth(MSG_WARNING, format_string("Could only place %zu points with requested spacing (requested %d)", candidates.size(), k));
-        print_sth(MSG_PROMPT, "Proceed with fewer points? (y/n)");
-
-        while (true)
-        {
-            print_sth(MSG_PLAIN, "> ", false);
-            std::string user_choice;
-            std::getline(std::cin, user_choice);
-
-            if (user_choice == "y" || user_choice == "Y")
+            // Keep the best candidate set we've found
+            if (candidates.size() > best_candidate_count)
             {
-                print_sth(MSG_INFO, format_string("Proceeding with %zu points", candidates.size()));
-                k = static_cast<int>(candidates.size());
+                best_candidates = candidates;
+                best_candidate_count = candidates.size();
+                print_sth(MSG_INFO, format_string("Offset try %d: found %zu candidates", offset_try + 1, candidates.size()));
+            }
+
+            // If we've found enough points, no need to try more offsets
+            if (static_cast<int>(best_candidate_count) >= k)
+            {
                 break;
             }
-            else if (user_choice == "n" || user_choice == "N")
+        }
+
+        // Use the best candidate set we found
+        candidates = best_candidates;
+
+        if (static_cast<int>(candidates.size()) >= k)
+            break;
+        shrink *= 0.995; // 0.5 % denser and try again (changed from 0.98)
+    }
+
+    // If we still don't have enough points, try a special boundary fill
+    if (static_cast<int>(candidates.size()) < k)
+    {
+        int remaining_points = k - candidates.size();
+        print_sth(MSG_INFO, format_string("Attempting to fill remaining %d points using boundary strategy", remaining_points));
+
+        // Create a mask to track where points already exist
+        cv::Mat point_presence_mask = cv::Mat::zeros(M, N, CV_8UC1);
+
+        // Mark existing candidates on mask (with padding for min distance)
+        for (const auto &p : candidates)
+        {
+            int x = static_cast<int>(std::round(p.x));
+            int y = static_cast<int>(std::round(p.y));
+
+            // Skip out of bounds points (shouldn't happen but for safety)
+            if (x < 0 || x >= N || y < 0 || y >= M)
+                continue;
+
+            int radius = static_cast<int>(d_req * 0.9); // Slightly smaller than min dist
+            cv::circle(point_presence_mask, cv::Point(x, y), radius, cv::Scalar(255), -1);
+        }
+
+        // Focus on the top part of the image where points are missing
+        int top_region_height = M / 4;
+
+        // Try to place points in empty areas, especially at the top
+        for (int attempt = 0; attempt < 500 && static_cast<int>(candidates.size()) < k; attempt++)
+        {
+            // Bias towards top of image
+            double y_bias = rng.uniform(0.0, 1.0);
+            int y;
+
+            // 80% chance to target top region if it's sparse
+            if (y_bias < 0.8)
             {
-                throw std::runtime_error("User aborted: Could not place requested number of points");
+                y = rng.uniform(0, top_region_height);
             }
             else
             {
-                print_sth(MSG_WARNING, "Please enter 'y' to proceed or 'n' to abort");
+                y = rng.uniform(0, M);
             }
+
+            int x = rng.uniform(0, N);
+
+            // Check if this area is already occupied
+            if (point_presence_mask.at<uchar>(y, x) > 0)
+            {
+                continue; // Area already has points nearby
+            }
+
+            // Add this point
+            candidates.emplace_back(x, y);
+
+            // Mark this point on the mask
+            cv::circle(point_presence_mask, cv::Point(x, y),
+                       static_cast<int>(d_req * 0.9), cv::Scalar(255), -1);
         }
+
+        print_sth(MSG_INFO, format_string("After boundary filling: %zu candidates (requested %d)",
+                                          candidates.size(), k));
     }
 
+#ifdef DEBUG
+    // verify guarantee in float domain
+    for (int i = 0; i < k; ++i)
+        for (int j = i + 1; j < k; ++j)
+            if (cv::norm(candidates[i] - candidates[j]) <= d_req - 1e-6)
+                throw std::logic_error("distance guarantee violated – should never happen");
+#endif
     // -------------- choose exactly k of them ----------------------------------
     std::shuffle(candidates.begin(), candidates.end(),
-                 std::mt19937_64{std::random_device{}()}); // Fixed BUG: Use random_device for seed
+                 std::mt19937_64{std::random_device{}()});
+
+    // Ensure we don't try to take more than we have
+    k = std::min(k, static_cast<int>(candidates.size()));
     candidates.resize(k);
 
     // -------------- convert to int pixels (duplicates cannot happen) ----------
@@ -552,8 +656,8 @@ vector<Point> backup_generateSeeds(int K, int rows, int cols)
             // 如果有候选点，选择距离最近recentPoints最小的点
             if (!candidates.empty())
             {
-                auto minIt = min_element(minDistances.begin(), minDistances.end());
-                int bestIndex = distance(minDistances.begin(), minIt);
+                auto minDistIt = min_element(minDistances.begin(), minDistances.end());
+                int bestIndex = distance(minDistances.begin(), minDistIt);
                 Point bestCandidate = candidates[bestIndex];
 
                 // 添加最佳候选点到种子列表
@@ -577,6 +681,13 @@ vector<Point> backup_generateSeeds(int K, int rows, int cols)
         print_sth(MSG_WARNING, format_string("Could not generate %d seeds. Generated %zu seeds instead.", K, seeds.size()));
     }
 
+    return seeds;
+}
+
+vector<Point> random_generate_seeds(const Mat &img, Mat &marker_mask, int k, double temperature)
+{
+    vector<Point> seeds;
+    // TODO implement random_generate_seeds
     return seeds;
 }
 

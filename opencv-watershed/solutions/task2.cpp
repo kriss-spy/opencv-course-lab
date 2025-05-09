@@ -315,8 +315,8 @@ void initApp_task2(vector<Point> &seeds)
 
     // double default_sigma = 1.02;
     task2_next_step = INPUT_IMAGE;
-    string default_image = "image/fruits.jpg";
-    img0 = get_image(default_image);
+    // string default_image = "image/fruits.jpg";
+    img0 = get_image();
     cout << "Image size: " << img0.cols << "x" << img0.rows << " pixels" << endl;
 
     task2_next_step = INPUT_K;

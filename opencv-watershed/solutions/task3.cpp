@@ -328,8 +328,8 @@ void initApp_task3(vector<Point> &seeds)
     // double default_sigma = 1.02;
 
     task3_next_step = INPUT_IMAGE;
-    string default_image = "image/fruits.jpg"; // TODO tackle path problem when running from other locations
-    img0 = get_image(default_image);
+    // string default_image = "image/fruits.jpg"; // TODO tackle path problem when running from other locations
+    img0 = get_image();
 
     std::cout << "Image size: " << img0.cols << "x" << img0.rows << " pixels" << std::endl;
 
