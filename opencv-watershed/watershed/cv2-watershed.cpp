@@ -1,6 +1,6 @@
 // use make
 // or compile manually
-// g++ cv2-watershed.cpp -o cv2-watershed -I/usr/include/opencv4 -L/usr/lib \
+// g++ cv2-watershed.cpp -o build/cv2-watershed -I/usr/include/opencv4 -L/usr/lib \
 -lopencv_core -lopencv_imgcodecs -lopencv_highgui -lopencv_imgproc
 
 // original watershed.cpp doesn't use cv2, but cv.h

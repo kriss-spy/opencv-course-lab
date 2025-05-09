@@ -45,6 +45,51 @@ Point prev_pt(-1, -1);
 NextStep task2_next_step;
 FourColor four_colors;
 
+// Global variables for displaying mouse marker info on GUI
+Mat g_four_color_result_base_img;
+string g_mouse_marker_text = "Mouse over to see Marker ID";
+int g_actual_total_regions = 0; // Added global variable for actual region count
+
+// Mouse callback function for the "four color result" window
+void on_mouse_four_color_result(int event, int x, int y, int flags, void *userdata)
+{
+    if (event == EVENT_MOUSEMOVE)
+    {
+        if (g_four_color_result_base_img.empty() || markers.empty() || markers.type() != CV_32SC1)
+        {
+            // Base image or markers not ready, or markers have unexpected type
+            g_mouse_marker_text = "Marker data not available";
+        }
+        else if (x >= 0 && x < markers.cols && y >= 0 && y < markers.rows)
+        {
+            int region_idx = markers.at<int>(y, x);
+            g_mouse_marker_text = "Marker ID at (" + to_string(x) + "," + to_string(y) + "): " + to_string(region_idx);
+        }
+        else
+        {
+            g_mouse_marker_text = "Mouse out of bounds";
+        }
+
+        if (!g_four_color_result_base_img.empty())
+        {
+            Mat display_img_with_text = g_four_color_result_base_img.clone();
+            Point text_origin(10, display_img_with_text.rows - 10);
+            Scalar text_color_main(255, 255, 255); // White
+            Scalar text_color_outline(0, 0, 0);    // Black
+            double font_scale = 0.4;
+            int thickness_main = 1;
+            int thickness_outline = 2;
+
+            // Draw outline text
+            putText(display_img_with_text, g_mouse_marker_text, text_origin, FONT_HERSHEY_SIMPLEX, font_scale, text_color_outline, thickness_outline, LINE_AA);
+            // Draw main text
+            putText(display_img_with_text, g_mouse_marker_text, text_origin, FONT_HERSHEY_SIMPLEX, font_scale, text_color_main, thickness_main, LINE_AA);
+
+            imshow("four color result", display_img_with_text);
+        }
+    }
+}
+
 const int k_min = 1;
 const int k_max = 5000; // TODO choose proper values for k range
 // theoretical max for 600x600 image, about 100000?
@@ -65,116 +110,53 @@ const Vec3b FOUR_COLOR_PALETTE[4] = {
 vector<pair<Point, pair<int, int>>> adjacency_points; // Point and the two region IDs
 
 // Function to find neighbors of a region - completely rewritten to properly detect adjacency
-vector<int> findNeighbors(const Mat &markers, int region_id, int total_regions)
+vector<int> findNeighbors(const Mat &markers_mat, int region_id, int total_regions)
 {
     vector<bool> is_neighbor(total_regions + 1, false);
     vector<int> neighbors;
 
-    // // Debug matrix to visualize where adjacencies are found
-    // Mat debug_vis;
-    // if (region_id == 3 || region_id == 10)
-    // { // Focus on the problematic regions
-    //     cvtColor(markers == region_id, debug_vis, COLOR_GRAY2BGR);
-    // }
-
-    // Detect boundary pixels for the current region
-    Mat region_mask = (markers == region_id);
-
-    // Dilate the region mask to find adjacent regions
-    Mat dilated;
+    Mat region_mask = (markers_mat == region_id);
+    Mat dilated_region;
     Mat kernel = getStructuringElement(MORPH_RECT, Size(3, 3));
-    dilate(region_mask, dilated, kernel, Point(-1, -1), 1);
+    dilate(region_mask, dilated_region, kernel);
 
-    // Subtract the original region to get only the boundary area
-    Mat boundary;
-    subtract(dilated, region_mask, boundary);
-
-    cout << "Checking neighbors for region " << region_id << ":" << endl;
-
-    // Find all regions in the boundary area
-    for (int i = 0; i < markers.rows; i++)
+    // Iterate over the original image bounds
+    for (int r = 0; r < markers_mat.rows; ++r)
     {
-        for (int j = 0; j < markers.cols; j++)
+        for (int c = 0; c < markers_mat.cols; ++c)
         {
-            if (boundary.at<uchar>(i, j) > 0)
+            // Check if this pixel is part of the dilated region but not the original region
+            if (dilated_region.at<uchar>(r, c) > 0 && !region_mask.at<uchar>(r, c))
             {
-                int neighbor_id = markers.at<int>(i, j);
-                if (neighbor_id > 0 && neighbor_id != region_id && neighbor_id <= total_regions)
+                int neighbor_id = markers_mat.at<int>(r, c);
+                // Ensure it's a valid, different region and not already added
+                if (neighbor_id > 0 && neighbor_id <= total_regions && neighbor_id != region_id && !is_neighbor[neighbor_id])
                 {
-                    // Only print when we first find a neighbor
-                    if (!is_neighbor[neighbor_id])
-                    {
-#ifdef DEBUG
-                        cout << "  Found neighbor " << neighbor_id << " at position (" << j << "," << i << ")" << endl;
-#endif
-                        // Store the meeting point with both region IDs
-                        // We'll store the point only once for each region pair (lower ID first)
-                        if (region_id < neighbor_id)
-                        {
-                            adjacency_points.push_back({Point(j, i), {region_id, neighbor_id}});
-                            // old region_id and neighbor_id are not in the same field
-                            // region_id, 1~...
-                            // neighbor_id, which is markers.at<int>(i, j), has nothing to do with region_id
-                            // changed region_id to markers value to fix this
-                        }
-
-                        // // Mark this point in the debug visualization if it's one of our focus regions
-                        // if ((region_id == 3 && neighbor_id == 10) || (region_id == 10 && neighbor_id == 3))
-                        // {
-                        //     if (!debug_vis.empty())
-                        //     {
-                        //         // Draw a bright yellow marker at the adjacency point
-                        //         circle(debug_vis, Point(j, i), 3, Scalar(0, 255, 255), -1);
-
-                        //         // Save the debug image for inspection
-                        //         string filename = "debug_region_" + to_string(region_id) +
-                        //                           "_neighbor_" + to_string(neighbor_id) + ".png";
-                        //         imwrite(filename, debug_vis);
-                        //         cout << "  Saved debug image to " << filename << endl;
-                        //     }
-                        // }
-                    }
                     is_neighbor[neighbor_id] = true;
+                    neighbors.push_back(neighbor_id);
+#ifdef DEBUG
+                    // cout << "  Region " << region_id << " found neighbor " << neighbor_id << " at (" << c << "," << r << ")" << endl;
+#endif
                 }
             }
         }
     }
-
-    // Collect all unique neighboring regions
-    for (int i = 1; i <= total_regions; i++)
-    {
-        if (is_neighbor[i])
-        {
-            neighbors.push_back(i);
-        }
-    }
-
     return neighbors;
 }
 
 // Function to build adjacency list for regions
-vector<vector<int>> buildAdjacencyList(const Mat &markers, int total_regions)
+vector<vector<int>> buildAdjacencyList(const Mat &markers_mat, int total_regions)
 {
-    // Clear the global adjacency points vector before building a new adjacency list
-    adjacency_points.clear();
-
+    adjacency_points.clear(); // Assuming adjacency_points is a global or accessible variable for debug
     vector<vector<int>> adjacency_list(total_regions + 1);
-    vector<bool> visited_regions(total_regions, false);
 
-    for (int i = 0; i < markers.rows; i++)
+    // Iterate through each possible region ID from 1 to total_regions
+    for (int region = 1; region <= total_regions; ++region)
     {
-        for (int j = 0; j < markers.cols; j++)
-        {
-            int region = markers.at<int>(i, j);
-            if (region > 0 && !visited_regions[region])
-            {
-                visited_regions[region] = true;
-                adjacency_list[region] = findNeighbors(markers, region, total_regions);
-            }
-        }
+        adjacency_list[region] = findNeighbors(markers_mat, region, total_regions);
     }
+
 #ifdef DEBUG
-    // Print adjacency list for debugging
     cout << "Adjacency List:" << endl;
     for (int i = 1; i <= total_regions; i++)
     {
@@ -362,6 +344,9 @@ void setupWindows()
     namedWindow("four color result", 1);
     imshow("image", img);
     imshow("watershed transform", wshed);
+#ifdef DEBUG
+    setMouseCallback("four color result", on_mouse_four_color_result, 0);
+#endif
     task2_next_step = GENERATE_SEEDS;
 }
 
@@ -369,6 +354,8 @@ void setupWindows()
 void runEventLoop(vector<Point> &seeds)
 {
     RNG rng(getTickCount());
+    int comp_count = 0; // Moved comp_count to a scope accessible by both 'w' and 'c' if needed, or use global.
+                        // For this fix, g_actual_total_regions will be used.
 
     for (;;)
     {
@@ -416,13 +403,14 @@ void runEventLoop(vector<Point> &seeds)
 
             printf("Found %zu contours for watershed\n", contours.size());
 
-            // Draw each contour with a unique label
+            comp_count = 0; // Reset comp_count before assigning region IDs
             for (int i = 0; i < contours.size(); i++)
             {
-                drawContours(markers, contours, i, Scalar(i + 1), -1);
+                drawContours(markers, contours, i, Scalar(i + 1), -1); // Region IDs are 1 to contours.size()
+                comp_count++;
             }
+            g_actual_total_regions = comp_count; // Store the actual number of regions
 
-            // Debug log
             markersDebugLog(markers);
 
             vector<Vec3b> color_tab;
@@ -467,8 +455,12 @@ void runEventLoop(vector<Point> &seeds)
 
         if (c == 'c' && task2_next_step == FOURCOLOR)
         {
-            // Get total number of regions (max marker value excluding boundaries and background)
-            int total_regions = seeds.size(); // 1~seeds.size()
+            if (g_actual_total_regions == 0)
+            {
+                cout << "Please run watershed segmentation first (press 'w')." << endl;
+                continue;
+            }
+            int total_regions = g_actual_total_regions; // Use the actual region count
 
             cout << "Total regions for four-coloring: " << total_regions << endl;
 
@@ -482,17 +474,20 @@ void runEventLoop(vector<Point> &seeds)
             double t_color = (double)getTickCount();
             vector<int> colors(total_regions + 1, -1);
 
-            // Option 1: Using BFS-based approach
-            colors = fourColorRegions(adjacency_list, total_regions);
-
-            // Option 2: For more challenging graphs, use backtracking
-            // Start with the most connected region for better results
-            // int start_region = getMostConnectedRegion(adjacency_list, total_regions);
-            // colors[start_region] = 0; // Start with RED
-            // bool success = colorRegionBacktracking(1, colors, adjacency_list, total_regions);
+            // Use backtracking for robust coloring
+            bool coloring_successful = colorRegionBacktracking(1, colors, adjacency_list, total_regions);
 
             t_color = (double)getTickCount() - t_color;
             printf("Four-coloring time = %gms\n", t_color / getTickFrequency() * 1000.);
+
+            if (!coloring_successful)
+            {
+                cout << "ERROR: Four-coloring failed to find a solution!" << endl;
+            }
+            else
+            {
+                cout << "Four-coloring attempt finished." << endl;
+            }
 
             // Count the number of regions with each color
             vector<int> color_count(4, 0);
@@ -549,8 +544,8 @@ void runEventLoop(vector<Point> &seeds)
 
 #ifdef DEBUG
             // Create a version of the four-color result with seed points
-            visualize_regions("four color result", four_color_result, seeds, markers);
-            // note that region numbering is markers.at<seed>
+            visualize_regions("four color result", four_color_result, seeds, markers); // BUG region numbering not right, some are even -1
+                                                                                       // note that region numbering is markers.at<seed>
 #endif
 
             // Verify that the four-coloring is valid
@@ -575,6 +570,69 @@ void runEventLoop(vector<Point> &seeds)
             else
             {
                 cout << "Four-coloring verification: FAILED" << endl;
+            }
+
+            if (task2_next_step == FOURCOLOR) // This outer if might be redundant if already inside 'c' and FOURCOLOR state
+            {
+                // The four_color_output variable was previously assigned the result of fourColorRegions.
+                // Now, we use the 'colors' vector directly to create the visualization.
+                // We need to ensure g_four_color_result_base_img is populated correctly.
+                // The existing code block for visualization using 'colors' vector is fine.
+                // The part that calls fourColorRegions again to get four_color_output is removed.
+
+                // Apply four-color result to the image (this part is already in the code)
+                Mat four_color_visual_result = img0.clone();
+                for (int i = 0; i < markers.rows; i++)
+                {
+                    for (int j = 0; j < markers.cols; j++)
+                    {
+                        int region_idx = markers.at<int>(i, j);
+                        Vec3b &pixel = four_color_visual_result.at<Vec3b>(i, j);
+                        if (region_idx == -1)
+                            pixel = Vec3b(255, 255, 255);
+                        else if (region_idx <= 0 || region_idx > total_regions)
+                            pixel = Vec3b(0, 0, 0);
+                        else
+                        {
+                            int color_idx = colors[region_idx];
+                            if (color_idx >= 0 && color_idx < 4)
+                                pixel = FOUR_COLOR_PALETTE[color_idx];
+                            else
+                                pixel = Vec3b(128, 128, 128); // Should not happen if coloring_successful
+                        }
+                    }
+                }
+
+#ifdef DEBUG
+                visualize_regions("four color result", four_color_visual_result, seeds, markers);
+#endif
+
+                // Update g_four_color_result_base_img for mouse callback
+                four_color_visual_result.copyTo(g_four_color_result_base_img);
+
+                // Display initial text on the GUI
+                Mat display_img_with_text = g_four_color_result_base_img.clone();
+                Point text_origin(10, display_img_with_text.rows - 10);
+                Scalar text_color_main(255, 255, 255);
+                Scalar text_color_outline(0, 0, 0);
+                double font_scale = 0.4;
+                int thickness_main = 1;
+                int thickness_outline = 2;
+                string initial_text = g_mouse_marker_text;
+                if (markers.empty() || total_regions == 0)
+                    initial_text = "Perform Watershed first (w)";
+                else if (!coloring_successful)
+                    initial_text = "Coloring failed. Check console.";
+
+                putText(display_img_with_text, initial_text, text_origin, FONT_HERSHEY_SIMPLEX, font_scale, text_color_outline, thickness_outline, LINE_AA);
+                putText(display_img_with_text, initial_text, text_origin, FONT_HERSHEY_SIMPLEX, font_scale, text_color_main, thickness_main, LINE_AA);
+                imshow("four color result", display_img_with_text);
+
+                task2_next_step = EXIT;
+            }
+            else
+            {
+                // ...existing code...
             }
         }
     }

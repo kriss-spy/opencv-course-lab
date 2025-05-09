@@ -373,23 +373,24 @@ void visualize_regions(string window_title, const Mat &img, const vector<Point> 
         // Only show numbers if requested and if there aren't too many points
         if (show_numbers && points.size() <= max_numbered_points)
         {
-            // Place the point number next to the point
-            Point textPos(points[i].x + 5, points[i].y + 5);
-            int x = points[i].x;
-            int y = points[i].y;
-            if (x <= 0)
-                x = 1;
-            if (x >= img.cols - 1)
-                x = img.cols - 2;
-            if (y <= 0)
-                y = 1;
-            if (y >= img.rows - 1)
-                y = img.rows - 2;
-            int idx = markers.at<int>(x, y);
+            Point seed_location = points[i];
+            Point textPos(seed_location.x + 5, seed_location.y + 5);
 
-            putText(display, to_string(idx), textPos, FONT_HERSHEY_SIMPLEX,
+            int region_id_at_seed = -99; // Default value if lookup fails or seed is out of bounds
+
+            // Ensure seed coordinates are within the bounds of the 'markers' matrix
+            // and that markers matrix is valid before attempting to access its elements.
+            if (!markers.empty() && markers.type() == CV_32SC1 &&
+                seed_location.y >= 0 && seed_location.y < markers.rows &&
+                seed_location.x >= 0 && seed_location.x < markers.cols)
+            {
+                // Correct access: markers.at<int>(row, col) which is markers.at<int>(y, x)
+                region_id_at_seed = markers.at<int>(seed_location.y, seed_location.x);
+            }
+
+            putText(display, to_string(region_id_at_seed), textPos, FONT_HERSHEY_SIMPLEX,
                     0.4, Scalar(0, 0, 0), 2, LINE_AA); // Outlined text (thicker)
-            putText(display, to_string(idx), textPos, FONT_HERSHEY_SIMPLEX,
+            putText(display, to_string(region_id_at_seed), textPos, FONT_HERSHEY_SIMPLEX,
                     0.4, Scalar(255, 255, 255), 1, LINE_AA); // White text
         }
     }
