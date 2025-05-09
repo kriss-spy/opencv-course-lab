@@ -56,13 +56,13 @@ int main(int argc, char **argv)
 
     RNG rng(getTickCount());
 
-    task3_next_step = INPUT_K;
+    task1_next_step = INPUT_K;
     k = get_k(k_min, k_max);
 
-    task3_next_step = INPUT_TEMP;
+    task1_next_step = INPUT_TEMP;
     double temperature = get_temperature(0, 1, default_temperature);
 
-    task3_next_step = INPUT_SIGMA;
+    task1_next_step = INPUT_SIGMA;
     double sigma = get_sigma(1, 2, default_sigma);
 
     print_task1_help();
@@ -83,7 +83,7 @@ int main(int argc, char **argv)
     imshow("image", img);
     imshow("watershed transform", wshed);
     // setMouseCallback("image", on_mouse, 0);
-    task3_next_step = GENERATE_SEEDS;
+    task1_next_step = GENERATE_SEEDS;
 
     // Main loop
     for (;;)
@@ -107,7 +107,7 @@ int main(int argc, char **argv)
             wshed = img0.clone();
             imshow("watershed transform", wshed);
         }
-        if (c == 'v' && task3_next_step == WATERSHED)
+        if (c == 'v' && task1_next_step == WATERSHED)
         {
             visualize_points("image", img, seeds, 200);
         }
@@ -118,9 +118,9 @@ int main(int argc, char **argv)
 
             seeds = generate_seeds(img0, marker_mask, k, temperature, sigma);
             // seeds = cyj_generateSeeds(k, img0.rows, img0.cols);
-            task3_next_step = WATERSHED;
+            task1_next_step = WATERSHED;
         }
-        if (c == 'w' && task3_next_step == WATERSHED)
+        if (c == 'w' && task1_next_step == WATERSHED)
         {
             // Clear markers before watershed
             markers = Mat::zeros(marker_mask.size(), CV_32SC1);

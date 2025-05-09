@@ -35,7 +35,7 @@ using namespace std;
 // Global variables
 Mat marker_mask, markers, img0, img, img_gray, wshed;
 Point prev_pt(-1, -1);
-NextStep task3_next_step;
+NextStep task1_next_step;
 
 // Global variables for k, temperature, and sigma
 int k;
@@ -323,19 +323,19 @@ void initApp_task3(vector<Point> &seeds)
     double default_temperature = 0.01;
     double default_sigma = 1.02;
 
-    task3_next_step = INPUT_IMAGE;
+    task1_next_step = INPUT_IMAGE;
     string default_image = "image/fruits.jpg"; // TODO tackle path problem when running from other locations
     img0 = get_image(default_image);
 
     std::cout << "Image size: " << img0.cols << "x" << img0.rows << " pixels" << std::endl;
 
-    task3_next_step = INPUT_K;
+    task1_next_step = INPUT_K;
     k = get_k(k_min, k_max);
 
-    task3_next_step = INPUT_TEMP;
+    task1_next_step = INPUT_TEMP;
     temperature = get_temperature(0, 1, default_temperature);
 
-    task3_next_step = INPUT_SIGMA;
+    task1_next_step = INPUT_SIGMA;
     sigma = get_sigma(1, 2, default_sigma);
 
     print_task1_help();
@@ -359,7 +359,7 @@ void setupWindows_task3()
 
     imshow("image", img);
     imshow("watershed transform", wshed);
-    task3_next_step = GENERATE_SEEDS;
+    task1_next_step = GENERATE_SEEDS;
 }
 
 void runEventLoop_task3(vector<Point> &seeds)
@@ -372,7 +372,7 @@ void runEventLoop_task3(vector<Point> &seeds)
 
         if (c == 27 || c == 'q')
         {
-            task3_next_step = EXIT;
+            task1_next_step = EXIT;
             break;
         }
         if (c == 'h')
@@ -396,15 +396,15 @@ void runEventLoop_task3(vector<Point> &seeds)
 
             seeds = generate_seeds(img0, marker_mask, k, temperature, sigma);
             // seeds = cyj_generateSeeds(k, img0.rows, img0.cols);
-            task3_next_step = WATERSHED;
+            task1_next_step = WATERSHED;
         }
 
-        if (c == 'v' && task3_next_step == WATERSHED)
+        if (c == 'v' && task1_next_step == WATERSHED)
         {
             visualize_points("image", img, seeds, 200);
         }
 
-        if (c == 'w' && task3_next_step == WATERSHED)
+        if (c == 'w' && task1_next_step == WATERSHED)
         {
             // Clear markers before watershed
             markers = Mat::zeros(marker_mask.size(), CV_32SC1);
@@ -455,9 +455,9 @@ void runEventLoop_task3(vector<Point> &seeds)
             addWeighted(wshed, 0.5, img_gray, 0.5, 0, wshed);
             imshow("watershed transform", wshed);
 
-            task3_next_step = HEAP_SORT_AREA;
+            task1_next_step = HEAP_SORT_AREA;
         }
-        if (c == 's' && task3_next_step == HEAP_SORT_AREA)
+        if (c == 's' && task1_next_step == HEAP_SORT_AREA)
         {
             cout << "getting area values..." << endl;
             area_values = get_area_values(markers); // Now returns {label, area}
@@ -570,9 +570,9 @@ void runEventLoop_task3(vector<Point> &seeds)
                 }
             }
 
-            task3_next_step = MARK_AREA_WITHIN_RANGE;
+            task1_next_step = MARK_AREA_WITHIN_RANGE;
         }
-        if (c == 't' && task3_next_step == MARK_AREA_WITHIN_RANGE)
+        if (c == 't' && task1_next_step == MARK_AREA_WITHIN_RANGE)
         {
             if (markers.empty() || img0.empty())
             {
@@ -770,7 +770,7 @@ void runEventLoop_task3(vector<Point> &seeds)
                 }
                 // --- End of Huffman Tree Visualization ---
             }
-            task3_next_step = EXIT; // Set next step to EXIT as requested
+            task1_next_step = EXIT; // Set next step to EXIT as requested
         }
     }
 }
