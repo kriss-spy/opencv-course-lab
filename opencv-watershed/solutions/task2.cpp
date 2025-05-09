@@ -30,7 +30,7 @@
 #include <stack>
 #include <unordered_set>
 #include "watershed_utils.h" // Include the utility functions
-#include "helper.h"
+#include "sample.h"
 
 using namespace cv;
 using namespace std;

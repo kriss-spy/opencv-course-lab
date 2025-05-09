@@ -28,6 +28,7 @@
 #include <fstream>           // For file output (DOT file)
 #include <cstdlib>           // For system() call
 #include "watershed_utils.h" // Include the utility functions
+#include "sample.h"
 
 using namespace cv;
 using namespace std;

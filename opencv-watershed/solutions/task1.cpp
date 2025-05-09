@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <random>
 #include "watershed_utils.h" // Include the utility functions
-
+#include "sample.h"
 using namespace cv;
 using namespace std;
 
@@ -118,7 +118,7 @@ int main(int argc, char **argv)
             img0.copyTo(img);
 
             seeds = generate_seeds(img0, marker_mask, k, temperature, sigma);
-            // seeds = cyj_generateSeeds(k, img0.rows, img0.cols);
+            // seeds = cyj_generateSeeds(k, img0.rows, img0.cols); // TODO use cyj_generateSeeds as second solution
             task1_next_step = WATERSHED;
         }
         if (c == 'w' && task1_next_step == WATERSHED)
