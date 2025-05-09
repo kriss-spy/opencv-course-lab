@@ -15,8 +15,7 @@
 // how to compile and run task1
 // cd opencv-course-lab/opencv-watershed/solutions
 // make
-// cd build
-// ./task1
+// ./build/task1
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -34,10 +33,6 @@ Mat marker_mask, markers, img0, img, img_gray, wshed;
 Point prev_pt(-1, -1);
 NextStep task1_next_step;
 
-// Add this helper function to verify minimum distances
-// Jittered grid vs Poisson disc
-// https://www.redblobgames.com/x/1830-jittered-grid/
-
 const int k_min = 1;
 const int k_max = 5000; // TODO choose proper values for k range
 // theoretical max for 600x600 image, about 100000?
@@ -51,7 +46,7 @@ int main(int argc, char **argv)
     vector<Point> seeds;
 
     task1_next_step = INPUT_IMAGE;
-    string default_image = "../image/fruits.jpg";
+    string default_image = "image/fruits.jpg";
     img0 = get_image(default_image);
 
     // Print image size for logging
