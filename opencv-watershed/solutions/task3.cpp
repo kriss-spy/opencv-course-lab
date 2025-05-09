@@ -321,8 +321,11 @@ map<int, string> performHuffmanCoding(const vector<pair<int, int>> &regions_data
 // New helper functions for task3
 void initApp_task3(vector<Point> &seeds)
 {
-    double default_temperature = 0.01;
-    double default_sigma = 1.02;
+    print_welcome();
+    print_task3_help();
+
+    // double default_temperature = 0.01;
+    // double default_sigma = 1.02;
 
     task3_next_step = INPUT_IMAGE;
     string default_image = "image/fruits.jpg"; // TODO tackle path problem when running from other locations
@@ -334,12 +337,10 @@ void initApp_task3(vector<Point> &seeds)
     k = get_k(k_min, k_max);
 
     task3_next_step = INPUT_TEMP;
-    temperature = get_temperature(0, 1, default_temperature);
+    temperature = get_temperature(0, 1);
 
-    task3_next_step = INPUT_SIGMA;
-    sigma = get_sigma(1, 2, default_sigma);
-
-    print_task3_help();
+    // task3_next_step = INPUT_SIGMA;
+    // sigma = get_sigma(1, 2, default_sigma);
 
     // Initialize images
     img = img0.clone();
@@ -395,8 +396,8 @@ void runEventLoop_task3(vector<Point> &seeds)
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
 
-            seeds = generate_seeds(img0, marker_mask, k, temperature, sigma);
-            // seeds = cyj_generateSeeds(k, img0.rows, img0.cols);
+            seeds = generate_seeds(img0, marker_mask, k, temperature);
+            // seeds = backup_generateSeeds(k, img0.rows, img0.cols);
             task3_next_step = WATERSHED;
         }
 

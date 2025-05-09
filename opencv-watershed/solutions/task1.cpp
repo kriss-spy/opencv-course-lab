@@ -40,9 +40,13 @@ const int k_max = 5000; // TODO choose proper values for k range
 // TODO automatic stress test
 int main(int argc, char **argv)
 {
+
+    print_welcome();
+    print_task1_help();
+
     int k = 0;
-    double default_temperature = 0.01;
-    double default_sigma = 1.02;
+    // default_temperature = 0.01;
+    // double default_sigma = 1.02;
     vector<Point> seeds;
 
     task1_next_step = INPUT_IMAGE;
@@ -60,12 +64,10 @@ int main(int argc, char **argv)
     k = get_k(k_min, k_max);
 
     task1_next_step = INPUT_TEMP;
-    double temperature = get_temperature(0, 1, default_temperature);
+    double temperature = get_temperature(0, 1);
 
-    task1_next_step = INPUT_SIGMA;
-    double sigma = get_sigma(1, 2, default_sigma);
-
-    print_task1_help();
+    // task1_next_step = INPUT_SIGMA;
+    // double sigma = get_sigma(1, 2, default_sigma);
 
     // Create windows
     namedWindow("image", 1);
@@ -108,19 +110,21 @@ int main(int argc, char **argv)
             imshow("watershed transform", wshed);
             task1_next_step = GENERATE_SEEDS;
         }
-        if (c == 'v' && task1_next_step == WATERSHED)
-        {
-            visualize_points("image", img, seeds, 200);
-        }
+
         if (c == 'g' && task1_next_step == GENERATE_SEEDS) // generate seeds
         {
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
 
-            seeds = generate_seeds(img0, marker_mask, k, temperature, sigma);
-            // seeds = cyj_generateSeeds(k, img0.rows, img0.cols); // TODO use cyj_generateSeeds as second solution
+            seeds = generate_seeds(img0, marker_mask, k, temperature);
             task1_next_step = WATERSHED;
         }
+
+        if (c == 'v' && task1_next_step == WATERSHED)
+        {
+            visualize_points("image", img, seeds, 200);
+        }
+
         if (c == 'w' && task1_next_step == WATERSHED)
         {
             // Clear markers before watershed

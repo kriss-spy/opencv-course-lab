@@ -16,7 +16,7 @@
 // how to compile and run task2
 // cd opencv-course-lab/opencv-watershed/solutions
 // make
-// build/task2
+// ./build/task2
 
 // below is task1 code
 // task2 not fully implemented
@@ -313,8 +313,7 @@ void initApp_task2(vector<Point> &seeds)
     print_welcome();
     print_task2_help();
 
-    double default_temperature = 0.01;
-    double default_sigma = 1.02;
+    // double default_sigma = 1.02;
     task2_next_step = INPUT_IMAGE;
     string default_image = "image/fruits.jpg";
     img0 = get_image(default_image);
@@ -324,10 +323,10 @@ void initApp_task2(vector<Point> &seeds)
     k = get_k(k_min, k_max);
 
     task2_next_step = INPUT_TEMP;
-    temperature = get_temperature(0, 1, default_temperature);
+    temperature = get_temperature(0, 1);
 
-    task2_next_step = INPUT_SIGMA;
-    sigma = get_sigma(1, 2, default_sigma);
+    // task2_next_step = INPUT_SIGMA;
+    // sigma = get_sigma(1, 2, default_sigma);
 
     img = img0.clone();
     img_gray = img0.clone();
@@ -385,7 +384,7 @@ void runEventLoop_task2(vector<Point> &seeds)
             img0.copyTo(img);
 
             // Call generate_seeds with marker_mask as a parameter
-            seeds = generate_seeds(img0, marker_mask, k, temperature, sigma);
+            seeds = generate_seeds(img0, marker_mask, k, temperature);
             // seeds: Vector of Points representing the locations of seed points for watershed segmentation
             // These points are the centers of initial regions that will grow during watershed
             task2_next_step = WATERSHED;

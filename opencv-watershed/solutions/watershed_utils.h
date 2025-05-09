@@ -332,9 +332,10 @@ int get_k(int k_min, int k_max)
 }
 
 // Get temperature parameter from user input
-double get_temperature(double t_min, double t_max, double t_default)
+double get_temperature(double t_min, double t_max)
 {
     double t;
+    double t_default = 0.01;
     print_sth(MSG_PROMPT, format_string("Please input temperature (e.g., 0.0 to 1.0). Press enter to use default: %.2f", t_default));
     while (true)
     {

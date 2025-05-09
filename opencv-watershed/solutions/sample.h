@@ -5,6 +5,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include "watershed_utils.h"
+
 using namespace cv;
 using namespace std;
 
@@ -35,7 +36,7 @@ bool verifyMinimumDistance(const vector<Point> &seeds, double minDist)
             }
         }
     }
-    print_sth(MSG_INFO, format_string("Distance violation ratio: %d/%zu seeds.", violation_cnt, seeds.size()));
+    print_sth(MSG_INFO, format_string("Distance violation cnt: %d", violation_cnt));
     print_sth(MSG_INFO, format_string("Max distance difference for violations: %.2f pixels.", max_violation_diff));
 
     return flag;
@@ -161,14 +162,12 @@ void visualize_regions(string window_title, const Mat &img, const vector<Point> 
 }
 
 std::vector<cv::Point>
-jittered_hex_grid_sample(const cv::Mat &img,
+jittered_hex_grid_sample(const cv::Mat &marker_mask,
                          int k,
-                         double temperature = 1.0,
-                         double sigma = 1.0 /*sigma  unused*/,
-                         bool /*zoomToEdge*/ = true)
+                         double temperature = 1.0)
 {
     using cv::Point2d; // sub-pixel helper
-    const int M = img.rows, N = img.cols;
+    const int M = marker_mask.rows, N = marker_mask.cols;
     if (k <= 0)
         return {};
 
@@ -272,6 +271,9 @@ jittered_hex_grid_sample(const cv::Mat &img,
 #endif
 
     print_sth(MSG_INFO, format_string("Hex sampler: generated %d points, min-distance %.3f px", k, d_req));
+
+    sampleDebugLog(marker_mask, out, d_req);
+
     return out;
 }
 
@@ -383,6 +385,7 @@ vector<Point> jittered_grid_sample(const Mat &marker_mask, int k, double tempera
             }
         }
     }
+
     // Print information about generated points
     print_sth(MSG_INFO, format_string("Generated %zu seed points using jittered grid sampling.", seeds.size()));
     print_sth(MSG_INFO, format_string("Target minimum distance threshold: %.2f pixels.", min_dist));
@@ -403,7 +406,7 @@ vector<Point> jittered_grid_sample(const Mat &marker_mask, int k, double tempera
     return seeds;
 }
 
-vector<Point> cyj_generateSeeds(int K, int rows, int cols)
+vector<Point> backup_generateSeeds(int K, int rows, int cols)
 {
     vector<Point> seeds;
     double minDistance = sqrt((rows * cols) / K);
@@ -577,7 +580,7 @@ vector<Point> cyj_generateSeeds(int K, int rows, int cols)
     return seeds;
 }
 
-vector<Point> generate_seeds(const Mat &img, Mat &marker_mask, int k, double temperature, double sigma)
+vector<Point> generate_seeds(const Mat &img, Mat &marker_mask, int k, double temperature)
 {
     // TODO ensure at least k seeds
     double t = (double)getTickCount();
@@ -587,8 +590,9 @@ vector<Point> generate_seeds(const Mat &img, Mat &marker_mask, int k, double tem
     marker_mask = Mat::zeros(img.size(), CV_8UC1);
 
     // generate k random seed points in marker_mask
-    // vector<Point> seeds = jittered__grid_sample(marker_mask, k, temperature, sigma, true);
-    vector<Point> seeds = jittered_hex_grid_sample(marker_mask, k, temperature, sigma, true);
+    // vector<Point> seeds = jittered_grid_sample(marker_mask, k, temperature, true);
+    vector<Point> seeds = jittered_hex_grid_sample(marker_mask, k, temperature);
+    // vector<Point> seeds = backup_generateSeeds(k, img.rows, img.cols);
 
     // Draw smaller circles for markers to avoid overlapping
     // But use distinct values for each region
