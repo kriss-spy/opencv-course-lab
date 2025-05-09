@@ -363,7 +363,10 @@ void runEventLoop_task2(vector<Point> &seeds)
     {
         int c = waitKey(0);
         if (c == 27 || c == 'q')
+        {
+            task2_next_step = EXIT;
             break;
+        }
         if (c == 'h')
         {
             print_task2_help();
@@ -375,11 +378,9 @@ void runEventLoop_task2(vector<Point> &seeds)
             imshow("image", img);
             wshed = img0.clone();
             imshow("watershed transform", wshed);
+            // TODO next step state restore to watershed
         }
-        if (c == 'v' && task2_next_step == WATERSHED)
-        {
-            visualize_points("image", img, seeds, 200);
-        }
+
         if (c == 'g') // generate seeds
         {
             marker_mask = Scalar::all(0);
@@ -391,6 +392,12 @@ void runEventLoop_task2(vector<Point> &seeds)
             // These points are the centers of initial regions that will grow during watershed
             task2_next_step = WATERSHED;
         }
+
+        if (c == 'v' && task2_next_step == WATERSHED)
+        {
+            visualize_points("image", img, seeds, 200);
+        }
+
         if (c == 'w' && task2_next_step == WATERSHED)
         {
             // Clear markers before watershed

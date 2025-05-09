@@ -91,7 +91,7 @@ void print_task3_help()
            //    "\tc - clear input and restart\n"
            "\tw - run watershed\n"
            "\ts - sort area values and print min and max\n"
-           "\th - input search range, mark areas, draw huffman tree");
+           "\tt - input search range, mark areas, draw huffman tree");
 }
 
 // Print current directory for debugging
@@ -1107,27 +1107,34 @@ void print_welcome() // TODO print_welcome
     cout << "===" << "opencv watershed lab program" << "===" << endl;
 }
 #endif
-vector<pair<int, int>> get_area_values(Mat &markers) // TODO debug handwritten code
+vector<pair<int, int>> get_area_values(Mat &markers)
 {
-    // pair.first: marker id
-    // pair.second: area value of the region
-    unordered_map<int, int> area_values;
+    // Returns vector of pairs: {area_value, marker_id}
+    unordered_map<int, int> region_pixel_counts; // map<marker_id, pixel_count>
     for (int r = 0; r < markers.rows; r++)
     {
         for (int c = 0; c < markers.cols; c++)
         {
-            int area_id = markers.at<int>(r, c);
-            if (area_id == -1)
-                continue;
-            area_values[area_id]++;
+            int marker_id = markers.at<int>(r, c);
+            // Valid marker_ids for regions are positive integers.
+            // -1 is boundary, 0 might be background or unassigned.
+            if (marker_id > 0)
+            {
+                region_pixel_counts[marker_id]++;
+            }
         }
     }
-    // Convert map to vector of pairs
-    vector<pair<int, int>> result;
-    result.reserve(area_values.size());
-    for (const auto &entry : area_values)
+
+    vector<pair<int, int>> result; // vector of {area_value, marker_id}
+    result.reserve(region_pixel_counts.size());
+    for (const auto &entry : region_pixel_counts)
     {
-        result.push_back({entry.first, entry.second});
+        int marker_id = entry.first;
+        int area_value = entry.second;
+        if (area_value > 0) // Ensure area is greater than 0
+        {
+            result.push_back({area_value, marker_id});
+        }
     }
     return result;
 }

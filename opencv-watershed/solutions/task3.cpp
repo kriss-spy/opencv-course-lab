@@ -47,7 +47,7 @@ void initApp_task3(vector<Point> &seeds)
     double default_sigma = 1.02;
 
     task3_next_step = INPUT_IMAGE;
-    string default_image = "../image/fruits.jpg";
+    string default_image = "image/fruits.jpg";
     img0 = get_image(default_image);
 
     std::cout << "Image size: " << img0.cols << "x" << img0.rows << " pixels" << std::endl;
@@ -93,9 +93,9 @@ void runEventLoop_task3(vector<Point> &seeds)
         int c = waitKey(0);
 
         if (c == 27 || c == 'q')
-            break;
-        if (c == 'c') // TODO implement c key
         {
+            task3_next_step = EXIT;
+            break;
         }
         if (c == 'h')
         {
@@ -108,11 +108,9 @@ void runEventLoop_task3(vector<Point> &seeds)
             imshow("image", img);
             wshed = img0.clone();
             imshow("watershed transform", wshed);
+            // TODO next step state restore to watershed
         }
-        if (c == 'v' && task3_next_step == WATERSHED)
-        {
-            visualize_points("image", img, seeds, 200);
-        }
+
         if (c == 'g') // generate seeds
         {
             marker_mask = Scalar::all(0);
@@ -122,6 +120,12 @@ void runEventLoop_task3(vector<Point> &seeds)
             // seeds = cyj_generateSeeds(k, img0.rows, img0.cols);
             task3_next_step = WATERSHED;
         }
+
+        if (c == 'v' && task3_next_step == WATERSHED)
+        {
+            visualize_points("image", img, seeds, 200);
+        }
+
         if (c == 'w' && task3_next_step == WATERSHED)
         {
             // Clear markers before watershed
@@ -172,11 +176,35 @@ void runEventLoop_task3(vector<Point> &seeds)
 
             addWeighted(wshed, 0.5, img_gray, 0.5, 0, wshed);
             imshow("watershed transform", wshed);
+
+            task3_next_step = HEAP_SORT_AREA;
         }
         if (c == 's' && task3_next_step == HEAP_SORT_AREA)
         {
+            cout << "getting area values..." << endl;
+            vector<pair<int, int>> area_values = get_area_values(markers); // Now returns {area, label}
+
+            if (area_values.empty())
+            {
+                cout << "No valid regions found to sort." << endl;
+            }
+            else
+            {
+                // Sort by area (first element of the pair)
+                sort(area_values.begin(), area_values.end(), [](const pair<int, int> &a, const pair<int, int> &b)
+                     { return a.first < b.first; });
+
+                // min_element and max_element will now correctly use the first element (area)
+                auto min_iter = area_values.front(); // Smallest area after sorting
+                auto max_iter = area_values.back();  // Largest area after sorting
+
+                cout << "min area: " << min_iter.first << " (label " << min_iter.second << ")" << endl;
+                cout << "max area: " << max_iter.first << " (label " << max_iter.second << ")" << endl; // Changed to max area
+            }
+
+            task3_next_step = MARK_AREA_WITHIN_RANGE;
         }
-        if (c == 'h' && task3_next_step == HUFFMAN_TREE)
+        if (c == 't' && task3_next_step == MARK_AREA_WITHIN_RANGE)
         {
         }
     }
