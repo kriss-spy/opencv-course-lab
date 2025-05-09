@@ -35,7 +35,7 @@ using namespace std;
 // Global variables
 Mat marker_mask, markers, img0, img, img_gray, wshed;
 Point prev_pt(-1, -1);
-NextStep task1_next_step;
+NextStep task3_next_step;
 
 // Global variables for k, temperature, and sigma
 int k;
@@ -323,22 +323,22 @@ void initApp_task3(vector<Point> &seeds)
     double default_temperature = 0.01;
     double default_sigma = 1.02;
 
-    task1_next_step = INPUT_IMAGE;
+    task3_next_step = INPUT_IMAGE;
     string default_image = "image/fruits.jpg"; // TODO tackle path problem when running from other locations
     img0 = get_image(default_image);
 
     std::cout << "Image size: " << img0.cols << "x" << img0.rows << " pixels" << std::endl;
 
-    task1_next_step = INPUT_K;
+    task3_next_step = INPUT_K;
     k = get_k(k_min, k_max);
 
-    task1_next_step = INPUT_TEMP;
+    task3_next_step = INPUT_TEMP;
     temperature = get_temperature(0, 1, default_temperature);
 
-    task1_next_step = INPUT_SIGMA;
+    task3_next_step = INPUT_SIGMA;
     sigma = get_sigma(1, 2, default_sigma);
 
-    print_task1_help();
+    print_task3_help();
 
     // Initialize images
     img = img0.clone();
@@ -359,7 +359,7 @@ void setupWindows_task3()
 
     imshow("image", img);
     imshow("watershed transform", wshed);
-    task1_next_step = GENERATE_SEEDS;
+    task3_next_step = GENERATE_SEEDS;
 }
 
 void runEventLoop_task3(vector<Point> &seeds)
@@ -372,7 +372,7 @@ void runEventLoop_task3(vector<Point> &seeds)
 
         if (c == 27 || c == 'q')
         {
-            task1_next_step = EXIT;
+            task3_next_step = EXIT;
             break;
         }
         if (c == 'h')
@@ -386,25 +386,25 @@ void runEventLoop_task3(vector<Point> &seeds)
             imshow("image", img);
             wshed = img0.clone();
             imshow("watershed transform", wshed);
-            // TODO next step state restore to watershed
+            task3_next_step = GENERATE_SEEDS;
         }
 
-        if (c == 'g') // generate seeds
+        if (c == 'g' && task3_next_step == GENERATE_SEEDS) // generate seeds
         {
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
 
             seeds = generate_seeds(img0, marker_mask, k, temperature, sigma);
             // seeds = cyj_generateSeeds(k, img0.rows, img0.cols);
-            task1_next_step = WATERSHED;
+            task3_next_step = WATERSHED;
         }
 
-        if (c == 'v' && task1_next_step == WATERSHED)
+        if (c == 'v' && task3_next_step == WATERSHED)
         {
             visualize_points("image", img, seeds, 200);
         }
 
-        if (c == 'w' && task1_next_step == WATERSHED)
+        if (c == 'w' && task3_next_step == WATERSHED)
         {
             // Clear markers before watershed
             markers = Mat::zeros(marker_mask.size(), CV_32SC1);
@@ -455,9 +455,9 @@ void runEventLoop_task3(vector<Point> &seeds)
             addWeighted(wshed, 0.5, img_gray, 0.5, 0, wshed);
             imshow("watershed transform", wshed);
 
-            task1_next_step = HEAP_SORT_AREA;
+            task3_next_step = HEAP_SORT_AREA;
         }
-        if (c == 's' && task1_next_step == HEAP_SORT_AREA)
+        if (c == 's' && task3_next_step == HEAP_SORT_AREA)
         {
             cout << "getting area values..." << endl;
             area_values = get_area_values(markers); // Now returns {label, area}
@@ -570,9 +570,9 @@ void runEventLoop_task3(vector<Point> &seeds)
                 }
             }
 
-            task1_next_step = MARK_AREA_WITHIN_RANGE;
+            task3_next_step = MARK_AREA_WITHIN_RANGE;
         }
-        if (c == 't' && task1_next_step == MARK_AREA_WITHIN_RANGE)
+        if (c == 't' && task3_next_step == MARK_AREA_WITHIN_RANGE)
         {
             if (markers.empty() || img0.empty())
             {
@@ -681,7 +681,7 @@ void runEventLoop_task3(vector<Point> &seeds)
 
                 imshow("Search Area Value Range", search_result_img);
                 cout << "Highlighted regions are shown in 'Search Area Value Range' window." << endl;
-
+                // TODO actually implement huffman coding
                 // --- Perform Huffman Coding ---
                 cout << endl
                      << "Performing Huffman Coding for regions in range..." << endl;
@@ -698,6 +698,7 @@ void runEventLoop_task3(vector<Point> &seeds)
                 }
                 else
                 {
+#ifdef DEBUG
                     cout << "Huffman Codes:" << endl;
                     // To print in a more readable order (e.g., by label or by area), sort if needed.
                     // For now, iterating through map (ordered by label by default for std::map)
@@ -727,6 +728,7 @@ void runEventLoop_task3(vector<Point> &seeds)
                         }
                         cout << " -> Code: " << code_pair.second << endl;
                     }
+#endif
                 }
                 // --- End of Huffman Coding ---
                 // --- Visualize Huffman Tree using Graphviz ---
@@ -770,7 +772,7 @@ void runEventLoop_task3(vector<Point> &seeds)
                 }
                 // --- End of Huffman Tree Visualization ---
             }
-            task1_next_step = EXIT; // Set next step to EXIT as requested
+            task3_next_step = EXIT; // Set next step to EXIT as requested
         }
     }
 }

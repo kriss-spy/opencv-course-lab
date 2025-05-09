@@ -7,6 +7,13 @@
 #include <iostream>
 #include <string>
 #include <random>
+#include <vector>                        // For std::vector in format_string
+#include <cstdarg>                       // For va_list in format_string
+#include <cstdio>                        // For vsnprintf in format_string
+#include <cstring>                       // For strerror
+#include <cerrno>                        // For errno
+#include <functional>                    // For std::function
+#include <opencv2/core/utils/logger.hpp> // For setLogLevel
 #ifdef _WIN32
 #include <direct.h>
 #define getcwd _getcwd
@@ -17,6 +24,118 @@
 
 using namespace cv;
 using namespace std;
+
+// ANSI escape codes for colors
+const string RESET_COLOR = "\033[0m";
+const string RED_COLOR = "\033[31m";
+const string GREEN_COLOR = "\033[32m";
+const string YELLOW_COLOR = "\033[33m";
+const string BLUE_COLOR = "\033[34m";
+const string MAGENTA_COLOR = "\033[35m";
+const string CYAN_COLOR = "\033[36m";
+const string WHITE_COLOR = "\033[37m";
+const string BOLD_STYLE = "\033[1m";
+
+// Emojis/Icons
+const string ICON_INFO = "ℹ️ ";
+const string ICON_SUCCESS = "✅ ";
+const string ICON_WARNING = "⚠️  ";
+const string ICON_ERROR = "❌ ";
+const string ICON_DEBUG = "🐞 ";
+const string ICON_PROMPT_ARROW = "➡️ "; // For prompts if desired, or keep plain
+const string ICON_HEADER = "🚀 ";
+const string ICON_HELP = "💡 ";
+
+enum MessageType
+{
+    MSG_INFO,
+    MSG_SUCCESS,
+    MSG_WARNING,
+    MSG_ERROR,
+    MSG_DEBUG,
+    MSG_PROMPT, // For user input lines like "> "
+    MSG_HEADER,
+    MSG_HELP,
+    MSG_PLAIN // For direct output without icons/colors, like simple prompts
+};
+
+// Helper function to format strings like printf
+std::string format_string(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    va_list args_copy;
+    va_copy(args_copy, args);
+    int size = vsnprintf(nullptr, 0, fmt, args_copy);
+    va_end(args_copy);
+
+    if (size < 0)
+    {
+        va_end(args);
+        // Consider throwing an exception or returning a specific error string
+        return "Error formatting string";
+    }
+
+    std::vector<char> buffer(size + 1);
+    vsnprintf(buffer.data(), buffer.size(), fmt, args);
+    va_end(args);
+    return std::string(buffer.data());
+}
+
+void print_sth(MessageType type, const string &message, bool newline = true)
+{
+    string prefix_icon = "";
+    string color_code = RESET_COLOR;
+    string style_code = "";
+
+    switch (type)
+    {
+    case MSG_INFO:
+        prefix_icon = ICON_INFO;
+        color_code = CYAN_COLOR;
+        break;
+    case MSG_SUCCESS:
+        prefix_icon = ICON_SUCCESS;
+        color_code = GREEN_COLOR;
+        break;
+    case MSG_WARNING:
+        prefix_icon = ICON_WARNING;
+        color_code = YELLOW_COLOR;
+        break;
+    case MSG_ERROR:
+        prefix_icon = ICON_ERROR;
+        color_code = RED_COLOR;
+        break;
+    case MSG_DEBUG:
+        prefix_icon = ICON_DEBUG;
+        color_code = MAGENTA_COLOR;
+        break;
+    case MSG_PROMPT: // Used for lines expecting user input
+        // No icon, simple prompt
+        std::cout << message;
+        if (newline)
+            std::cout << std::endl;
+        return;
+    case MSG_HEADER:
+        prefix_icon = ICON_HEADER;
+        color_code = BOLD_STYLE + MAGENTA_COLOR;
+        break;
+    case MSG_HELP:
+        prefix_icon = ICON_HELP;
+        color_code = BLUE_COLOR;
+        break;
+    case MSG_PLAIN: // For simple, unstyled output like "> "
+        std::cout << message;
+        if (newline)
+            std::cout << std::endl;
+        return;
+    }
+    std::cout << color_code << style_code << prefix_icon << RESET_COLOR << color_code << message << RESET_COLOR;
+    if (newline)
+    {
+        std::cout << std::endl;
+    }
+}
 
 // Enum for application state
 enum NextStep
@@ -42,56 +161,64 @@ enum FourColor
     BLUE
 };
 
-// enum task2_next_step
-// {
-//     INPUT_IMAGE,
-//     INPUT_K,
-//     INPUT_TEMP,
-//     INPUT_SIGMA,
-//     GENERATE_SEEDS,
-//     WATERSHED,
-//     FOURCOLOR,
-//     EXIT
-// };
-
 // Print help information
 void print_task1_help()
 {
-    // Print instructions
-    printf("Hot keys: \n"
-           "\tESC or q - quit the program\n"
-           "\tr - restore the original image\n"
-           "\tg - generate seeds\n"
-           "\tv - visualize generated seeds\n"
-           "\tc - clear input and restart\n"
-           "\tw - run watershed\n");
+    string help_text =
+        "Task 1: Seed-based Watershed Segmentation\n"
+        "\tUse the seed-based marker watershed algorithm (OpenCV's built-in `watershed`) to oversegment the input image.\n\n"
+        "\tThe user provides an input image and an integer K. The program should automatically compute\n"
+        "\tK random seed points, ensuring the distance between any two seed points is > (M*N/K)^0.5\n\n"
+        "\tThen, the program should mark the positions and labels of all seed points on the original image\n"
+        "\tand visualize the watershed algorithm results using semi-transparent random coloring.\n\n"
+        "Hot keys: \n"
+        "\tESC or q - quit the program\n"
+        "\tr - restore the original image\n"
+        "\tg - generate seeds\n"
+        "\tv - visualize generated seeds\n"
+        // "\tc - clear input and restart\n"
+        "\tw - run watershed\n";
+    print_sth(MSG_HELP, help_text);
 }
 
 void print_task2_help()
 {
-    // Print instructions
-    printf("Hot keys: \n"
-           "\tESC or q - quit the program\n"
-           "\tr - restore the original image\n"
-           "\tg - generate seeds\n"
-           "\tv - visualize generated seeds\n"
-           //    "\tc - clear input and restart\n"
-           "\tw - run watershed\n"
-           "\tc - perform four color\n");
+    string help_text =
+        "Task 2: Four-Color Theorem for Watershed Segmentation\n"
+        "\tUsing adjacency lists to analyze neighboring relationships between regions in watershed segmentation results\n"
+        "\tand applying the four-color theorem to recolor watershed results.\n\n"
+        "\tThis task analyzes region adjacency in watershed segmented images and demonstrates the four-color theorem\n"
+        "\tby recoloring regions such that no adjacent regions share the same color, using only four distinct colors.\n\n"
+        "Hot keys: \n"
+        "\tESC or q - quit the program\n"
+        "\tr - restore the original image\n"
+        "\tg - generate seeds\n"
+        "\tv - visualize generated seeds\n"
+        //    "\tc - clear input and restart\n"
+        "\tw - run watershed\n"
+        "\tc - perform four color\n";
+    print_sth(MSG_HELP, help_text);
 }
 
 void print_task3_help()
 {
-    // Print instructions
-    printf("Hot keys: \n"
-           "\tESC or q - quit the program\n"
-           "\tr - restore the original image\n"
-           "\tg - generate seeds\n"
-           "\tv - visualize generated seeds\n"
-           //    "\tc - clear input and restart\n"
-           "\tw - run watershed\n"
-           "\ts - sort area values and print min and max\n"
-           "\tt - input search range, mark areas, draw huffman tree");
+    string help_text =
+        "Task 3: Region Area Analysis and Huffman Coding\n"
+        "\tBased on the \"heap sort\" results of the area sizes, print the maximum and minimum areas.\n"
+        "\tUsers input a search range (lower and upper bounds for area). Using binary search, the program\n"
+        "\thighlights all watershed results (marked regions) that meet the criteria.\n\n"
+        "\tThese highlighted regions' area sizes are then used as weights to perform Huffman coding,\n"
+        "\tand the corresponding Huffman tree is visualized.\n\n"
+        "Hot keys: \n"
+        "\tESC or q - quit the program\n"
+        "\tr - restore the original image\n"
+        "\tg - generate seeds\n"
+        "\tv - visualize generated seeds\n"
+        //    "\tc - clear input and restart\n"
+        "\tw - run watershed\n"
+        "\ts - sort area values and print min and max\n"
+        "\tt - input search range, mark areas, draw huffman tree";
+    print_sth(MSG_HELP, help_text);
 }
 
 // Print current directory for debugging
@@ -100,11 +227,11 @@ void print_current_dir()
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) != NULL)
     {
-        cout << "Current working directory: " << cwd << endl;
+        print_sth(MSG_DEBUG, "Current working directory: " + string(cwd));
     }
     else
     {
-        perror("getcwd() error");
+        print_sth(MSG_ERROR, string("getcwd() error: ") + strerror(errno));
     }
 }
 
@@ -114,31 +241,50 @@ Mat get_image(string default_path)
     print_current_dir();
 
     Mat img0;
-    cout << "please input image in image/ folder" << endl;
-    cout << "press enter to use default image fruits.jpg" << endl;
+    print_sth(MSG_PROMPT, "Please input image name from 'image/' folder (e.g., fruits.jpg)");
+    print_sth(MSG_PROMPT, "Press enter to use default image: " + default_path.substr(default_path.find_last_of("/\\") + 1));
     while (true)
     {
         string filepath = "../image/";
-        cout << "> ";
+        print_sth(MSG_PLAIN, "> ", false);
         string input;
         getline(cin, input);
         if (!input.empty())
         {
             filepath += input;
+            // Temporarily disable OpenCV's own error logging for imread
+            cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
             img0 = imread(filepath, 1);
+            // Restore a more verbose log level (e.g., WARNING or INFO)
+            cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_WARNING); // Or your preferred default
+
             if (img0.empty())
             {
-                cout << "please input a valid path!" << endl;
+                print_sth(MSG_WARNING, "Could not open or find the image. Please input a valid path!");
                 continue;
             }
             else
             {
+                print_sth(MSG_SUCCESS, "Image loaded: " + filepath);
                 return img0;
             }
         }
         else
         {
+            // Temporarily disable OpenCV's own error logging for imread
+            cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
             img0 = imread(default_path, 1);
+            // Restore a more verbose log level
+            cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_WARNING); // Or your preferred default
+
+            if (img0.empty())
+            {
+                print_sth(MSG_ERROR, "Default image could not be loaded: " + default_path);
+                // Potentially exit or throw an error if default image is critical
+                // For now, we'll let the loop continue or caller handle empty Mat
+                return Mat();
+            }
+            print_sth(MSG_SUCCESS, "Default image loaded: " + default_path);
             return img0;
         }
     }
@@ -148,11 +294,10 @@ Mat get_image(string default_path)
 int get_k(int k_min, int k_max)
 {
     int k = 0;
-    cout << "please input k, desired number of random seed points" << endl;
-    cout << "for example, 100, 500, 1000" << endl;
+    print_sth(MSG_PROMPT, format_string("Please input k (number of random seed points, e.g., 100, 500, 1000). Range: [%d, %d]", k_min, k_max));
     while (true)
     {
-        cout << "> ";
+        print_sth(MSG_PLAIN, "> ", false);
         string input;
         getline(cin, input);
         if (!input.empty())
@@ -162,7 +307,7 @@ int get_k(int k_min, int k_max)
                 k = stoi(input);
                 if (k < k_min || k > k_max)
                 {
-                    cout << "k out of range!" << endl;
+                    print_sth(MSG_WARNING, format_string("k is out of range! Please enter a value between %d and %d.", k_min, k_max));
                 }
                 else
                 {
@@ -171,16 +316,16 @@ int get_k(int k_min, int k_max)
             }
             catch (const std::invalid_argument &e)
             {
-                cout << "Invalid input! Please enter a valid number." << endl;
+                print_sth(MSG_ERROR, "Invalid input! Please enter a valid number.");
             }
             catch (const std::out_of_range &e)
             {
-                cout << "Input is too large!" << endl;
+                print_sth(MSG_ERROR, "Input is too large! Please enter a valid number within the integer range.");
             }
         }
         else
         {
-            cout << "please input k!" << endl;
+            print_sth(MSG_PROMPT, "No input received. Please input k!");
             continue;
         }
     }
@@ -190,10 +335,10 @@ int get_k(int k_min, int k_max)
 double get_temperature(double t_min, double t_max, double t_default)
 {
     double t;
-    cout << "please input temperature between 0 and 1, press enter to use default " << t_default << endl;
+    print_sth(MSG_PROMPT, format_string("Please input temperature (e.g., 0.0 to 1.0). Press enter to use default: %.2f", t_default));
     while (true)
     {
-        cout << "> ";
+        print_sth(MSG_PLAIN, "> ", false);
         string input;
         getline(cin, input);
         if (!input.empty())
@@ -203,7 +348,7 @@ double get_temperature(double t_min, double t_max, double t_default)
                 t = stof(input);
                 if (t < t_min || t > t_max)
                 {
-                    cout << "temperature out of range!" << endl;
+                    print_sth(MSG_WARNING, format_string("Temperature is out of range! Please enter a value between %.2f and %.2f.", t_min, t_max));
                 }
                 else
                 {
@@ -212,15 +357,16 @@ double get_temperature(double t_min, double t_max, double t_default)
             }
             catch (const std::invalid_argument &e)
             {
-                cout << "Invalid input! Please enter a valid number." << endl;
+                print_sth(MSG_ERROR, "Invalid input! Please enter a valid number.");
             }
             catch (const std::out_of_range &e)
             {
-                cout << "Input is too large!" << endl;
+                print_sth(MSG_ERROR, "Input is too large! Please enter a valid number.");
             }
         }
         else
         {
+            print_sth(MSG_INFO, format_string("Using default temperature: %.2f", t_default));
             return t_default;
         }
     }
@@ -230,10 +376,10 @@ double get_temperature(double t_min, double t_max, double t_default)
 double get_sigma(double sigma_min, double sigma_max, double sigma_default)
 {
     double sigma;
-    cout << "please input sigma, press enter to use default " << sigma_default << endl;
+    print_sth(MSG_PROMPT, format_string("Please input sigma. Press enter to use default: %.2f", sigma_default));
     while (true)
     {
-        cout << "> ";
+        print_sth(MSG_PLAIN, "> ", false);
         string input;
         getline(cin, input);
         if (!input.empty())
@@ -243,7 +389,7 @@ double get_sigma(double sigma_min, double sigma_max, double sigma_default)
                 sigma = stof(input);
                 if (sigma < sigma_min || sigma > sigma_max)
                 {
-                    cout << "sigma out of range!" << endl;
+                    print_sth(MSG_WARNING, format_string("Sigma is out of range! Please enter a value between %.2f and %.2f.", sigma_min, sigma_max));
                 }
                 else
                 {
@@ -252,15 +398,16 @@ double get_sigma(double sigma_min, double sigma_max, double sigma_default)
             }
             catch (const std::invalid_argument &e)
             {
-                cout << "Invalid input! Please enter a valid number." << endl;
+                print_sth(MSG_ERROR, "Invalid input! Please enter a valid number.");
             }
             catch (const std::out_of_range &e)
             {
-                cout << "Input is too large!" << endl;
+                print_sth(MSG_ERROR, "Input is too large! Please enter a valid number.");
             }
         }
         else
         {
+            print_sth(MSG_INFO, format_string("Using default sigma: %.2f", sigma_default));
             return sigma_default;
         }
     }
@@ -272,29 +419,29 @@ bool verifyMinimumDistance(const vector<Point> &seeds, double minDist)
     bool flag = true;
     int max_violation_print = 20;
     int violation_cnt = 0;
-    double max_violation = 0;
-    for (int i = 0; i < seeds.size(); i++)
+    double max_violation_diff = 0; // Renamed from max_violation to avoid conflict
+    for (size_t i = 0; i < seeds.size(); i++)
     {
-        for (int j = i + 1; j < seeds.size(); j++)
+        for (size_t j = i + 1; j < seeds.size(); j++)
         {
             double dist = norm(seeds[i] - seeds[j]);
             if (dist < minDist)
             {
                 violation_cnt++;
-                max_violation = max(max_violation, minDist - dist);
+                max_violation_diff = max(max_violation_diff, minDist - dist);
 #ifdef DEBUG
                 if (violation_cnt < max_violation_print)
                 {
-                    printf("Distance violation between seeds %d and %d: %.2f < %.2f\n",
-                           i + 1, j + 1, dist, minDist);
+                    print_sth(MSG_DEBUG, format_string("Distance violation between seeds %zu and %zu: %.2f < %.2f",
+                                                       i + 1, j + 1, dist, minDist));
                 }
 #endif
                 flag = false;
             }
         }
     }
-    cout << "violation ratio: " << violation_cnt << "/" << seeds.size() << endl;
-    cout << "max diff: " << max_violation << endl;
+    print_sth(MSG_INFO, format_string("Distance violation ratio: %d/%zu seeds.", violation_cnt, seeds.size()));
+    print_sth(MSG_INFO, format_string("Max distance difference for violations: %.2f pixels.", max_violation_diff));
 
     return flag;
 }
@@ -308,12 +455,12 @@ void markersDebugLog(const Mat &markers)
     Mat marker_mask_copy;
     markers.convertTo(marker_mask_copy, CV_8UC1);
     findContours(marker_mask_copy, contours, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
-    cout << "Number of contours found: " << contours.size() << endl;
+    print_sth(MSG_DEBUG, format_string("Number of contours found in markers: %zu", contours.size()));
 
     // Find min/max values in markers before watershed
     double minVal, maxVal;
     minMaxLoc(markers, &minVal, &maxVal);
-    cout << "Markers minVal: " << minVal << ", maxVal: " << maxVal << endl;
+    print_sth(MSG_DEBUG, format_string("Markers minVal: %.0f, maxVal: %.0f", minVal, maxVal));
 #endif
 }
 
@@ -321,11 +468,10 @@ void markersDebugLog(const Mat &markers)
 void sampleDebugLog(const Mat &marker_mask, vector<Point> seeds, double minDist)
 {
 #ifdef DEBUG
-    // Print the first 10 seeds for debugging
-    printf("First 10 seed points:\n");
+    print_sth(MSG_DEBUG, "First 10 seed points:");
     for (int i = 0; i < min(10, (int)seeds.size()); i++)
     {
-        printf("Seed %d: (%d, %d)\n", i + 1, seeds[i].x, seeds[i].y);
+        print_sth(MSG_DEBUG, format_string("Seed %d: (%d, %d)", i + 1, seeds[i].x, seeds[i].y));
     }
 #endif
 }
@@ -333,7 +479,7 @@ void sampleDebugLog(const Mat &marker_mask, vector<Point> seeds, double minDist)
 // Calculate distance between two points
 double calculateDistance(const Point &p1, const Point &p2)
 {
-    return sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2));
+    return sqrt(pow(p1.x - p2.x, 2) + pow(p2.y - p2.y, 2));
 }
 
 // Visualize seeds on the image
@@ -369,7 +515,7 @@ void visualize_points(string window_title, const Mat &img, const vector<Point> &
     imshow(window_title, display);
 
     // Print summary information
-    printf("Visualized %zu seed points in %s\n", points.size(), window_title.c_str());
+    print_sth(MSG_INFO, format_string("Visualized %zu seed points in window '%s'", points.size(), window_title.c_str()));
 }
 
 void visualize_regions(string window_title, const Mat &img, const vector<Point> &points, cv::Mat markers,
@@ -416,364 +562,288 @@ void visualize_regions(string window_title, const Mat &img, const vector<Point> 
     imshow(window_title, display);
 
     // Print summary information
-    printf("Visualized %zu regions with seed points in %s\n", points.size(), window_title.c_str());
+    print_sth(MSG_INFO, format_string("Visualized %zu regions with seed points in window '%s'", points.size(), window_title.c_str()));
 }
 
-bool try_adjust_seeds(Point &seed, vector<Point> &violation_seeds, double min_dist, const Mat &marker_mask)
+// bool try_adjust_seeds(Point &seed, vector<Point> &violation_seeds, double min_dist, const Mat &marker_mask)
+// {
+//     // TODO verity funcionality
+//     const int MAX_ATTEMPTS = 30;
+//     const int NUM_DIRECTIONS = 16;
+//     const double MAX_RADIUS_MULTIPLIER = 2.0;
+
+//     int img_height = marker_mask.rows;
+//     int img_width = marker_mask.cols;
+
+//     Point original_seed = seed;
+//     double current_min_dist = DBL_MAX;
+
+//     // Compute the current minimum distance to violating neighbors
+//     for (const Point &violator : violation_seeds)
+//     {
+//         double dist = norm(seed - violator);
+//         current_min_dist = min(current_min_dist, dist);
+//     }
+
+//     //--- 1) Force-directed approach
+//     for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++)
+//     {
+//         Point2f force_vector(0, 0);
+//         bool all_satisfied = true;
+
+//         // Calculate net repulsion force from violating neighbors
+//         for (const Point &violator : violation_seeds)
+//         {
+//             double dist = norm(seed - violator);
+//             if (dist < min_dist)
+//             {
+//                 all_satisfied = false;
+//                 Point2f direction(seed.x - violator.x, seed.y - violator.y);
+//                 double mag = norm(direction);
+//                 if (mag > 0)
+//                 {
+//                     direction.x /= mag;
+//                     direction.y /= mag;
+//                     double force_strength = (min_dist - dist) / min_dist;
+//                     force_vector.x += direction.x * force_strength;
+//                     force_vector.y += direction.y * force_strength;
+//                 }
+//             }
+//         }
+
+//         if (all_satisfied)
+//         {
+//             // Already satisfied all constraints, done
+//             print_sth(MSG_DEBUG, format_string("Seed adjusted successfully via force-directed approach after %d attempts.", attempt));
+//             return true;
+//         }
+
+//         if (norm(force_vector) < 1e-6)
+//             break; // No meaningful force to move the seed
+
+//         // Normalize force
+//         double fmag = norm(force_vector);
+//         force_vector.x /= fmag;
+//         force_vector.y /= fmag;
+
+//         // Step size increases each attempt
+//         double step_size = min_dist * 0.2 * (1 + attempt * 0.1);
+
+//         // Try the new position
+//         Point new_seed(
+//             cvRound(seed.x + force_vector.x * step_size),
+//             cvRound(seed.y + force_vector.y * step_size));
+
+//         // Keep within image
+//         new_seed.x = max(0, min(img_width - 1, new_seed.x));
+//         new_seed.y = max(0, min(img_height - 1, new_seed.y));
+
+//         // Check if new position improves the minimum distance
+//         double new_min_dist = DBL_MAX;
+//         for (const Point &violator : violation_seeds)
+//         {
+//             double dist = norm(new_seed - violator);
+//             new_min_dist = min(new_min_dist, dist);
+//         }
+
+//         // If it improves (or at least doesn't worsen), update seed
+//         if (new_min_dist > current_min_dist)
+//         {
+//             seed = new_seed;
+//             current_min_dist = new_min_dist;
+//         }
+//         else
+//         {
+//             print_sth(MSG_DEBUG, "Force-directed adjustment did not improve minimum distance, stopping force attempts.");
+//             // Not an improvement, stop force attempts
+//             break;
+//         }
+//     }
+
+//     //--- 2) Systematic search in multiple directions if force-based failed
+//     Point best_seed = seed;
+//     double best_min_violation_dist = current_min_dist;
+
+//     for (int i = 0; i < NUM_DIRECTIONS; i++)
+//     {
+//         double angle = 2.0 * CV_PI * i / NUM_DIRECTIONS;
+//         for (double radius_mult = 0.5; radius_mult <= MAX_RADIUS_MULTIPLIER; radius_mult += 0.25)
+//         {
+//             double radius = min_dist * radius_mult;
+//             Point test_seed(
+//                 cvRound(original_seed.x + cos(angle) * radius),
+//                 cvRound(original_seed.y + sin(angle) * radius));
+
+//             // Stay in bounds
+//             test_seed.x = max(0, min(img_width - 1, test_seed.x));
+//             test_seed.y = max(0, min(img_height - 1, test_seed.y));
+
+//             // Check minimum distance to violating neighbors
+//             double local_min_dist = DBL_MAX;
+//             bool satisfies_all = true;
+//             for (const Point &violator : violation_seeds)
+//             {
+//                 double dist = norm(test_seed - violator);
+//                 local_min_dist = min(local_min_dist, dist);
+//                 if (dist < min_dist)
+//                     satisfies_all = false;
+//             }
+
+//             // If fully satisfied, update and return
+//             if (satisfies_all)
+//             {
+//                 seed = test_seed;
+//                 print_sth(MSG_DEBUG, "Seed adjusted successfully via systematic search.");
+//                 return true;
+//             }
+
+//             // Otherwise track best improvement
+//             if (local_min_dist > best_min_violation_dist)
+//             {
+//                 best_min_violation_dist = local_min_dist;
+//                 best_seed = test_seed;
+//             }
+//         }
+//     }
+
+//     // If we found a slightly better position, use that
+//     if (best_min_violation_dist > current_min_dist)
+//     {
+//         seed = best_seed;
+//         print_sth(MSG_WARNING, format_string("Could not fully satisfy constraints, but improved min distance from %.2f to %.2f (required: %.2f)",
+//                                              current_min_dist, best_min_violation_dist, min_dist));
+//         return true;
+//     }
+
+//     // Failed to improve enough
+//     print_sth(MSG_WARNING, format_string("Failed to adjust seed at (%d, %d) with min_dist=%.2f. Closest violation distance remained: %.2f",
+//                                          original_seed.x, original_seed.y, min_dist, current_min_dist));
+//     return false;
+// }
+
+// helper for logs -------------------------------------------------------------
+void log_msg(int level, const std::string &s); // <-- your print_sth wrapper
+
+// -----------------------------------------------------------------------------
+// Returns k points, each (x,y) an *integer* pixel, pair-wise distance >
+//            d_req = sqrt(M*N / k)
+//
+// Throws std::runtime_error only if k is impossible with that bound
+// (e.g. k > M*N or the image is only a few pixels wide).
+// -----------------------------------------------------------------------------
+std::vector<cv::Point>
+jittered_hex_grid_sample(const cv::Mat &img,
+                         int k,
+                         double temperature = 1.0,
+                         double sigma = 1.0 /*sigma  unused*/,
+                         bool /*zoomToEdge*/ = true)
 {
-    // TODO verity funcionality
-    const int MAX_ATTEMPTS = 30;
-    const int NUM_DIRECTIONS = 16;
-    const double MAX_RADIUS_MULTIPLIER = 2.0;
+    using cv::Point2d; // sub-pixel helper
+    const int M = img.rows, N = img.cols;
+    if (k <= 0)
+        return {};
 
-    int img_height = marker_mask.rows;
-    int img_width = marker_mask.cols;
+    const double area = static_cast<double>(M) * N;
+    const double d_req = std::sqrt(area / k); // target min distance
+    const double SAFETY = std::sqrt(2.0);     // loss when rounding → int
 
-    Point original_seed = seed;
-    double current_min_dist = DBL_MAX;
+    // equal-area hex: side s0  ⇒  centre spacing d0 = 1.07392 * d_req
+    auto side_from_area = [](double a)
+    { return std::sqrt(2 * a / (3 * std::sqrt(3.0))); };
 
-    // Compute the current minimum distance to violating neighbors
-    for (const Point &violator : violation_seeds)
+    double s0 = side_from_area(area / k); // initial hex side
+    double shrink = 1.0;                  // we may tighten lattice
+    std::vector<Point2d> candidates;
+    cv::RNG rng(static_cast<uint64_t>(std::random_device{}())); // Fixed BUG: Use random_device for seed
+
+    // -------------- adaptive lattice until we can fit >= k --------------------
+    while (true)
     {
-        double dist = norm(seed - violator);
-        current_min_dist = min(current_min_dist, dist);
-    }
-
-    //--- 1) Force-directed approach
-    for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++)
-    {
-        Point2f force_vector(0, 0);
-        bool all_satisfied = true;
-
-        // Calculate net repulsion force from violating neighbors
-        for (const Point &violator : violation_seeds)
-        {
-            double dist = norm(seed - violator);
-            if (dist < min_dist)
-            {
-                all_satisfied = false;
-                Point2f direction(seed.x - violator.x, seed.y - violator.y);
-                double mag = norm(direction);
-                if (mag > 0)
-                {
-                    direction.x /= mag;
-                    direction.y /= mag;
-                    double force_strength = (min_dist - dist) / min_dist;
-                    force_vector.x += direction.x * force_strength;
-                    force_vector.y += direction.y * force_strength;
-                }
-            }
-        }
-
-        if (all_satisfied)
-        {
-            // Already satisfied all constraints, done
-            cout << "Seed adjusted successfully after " << attempt << " attempts" << endl;
-            return true;
-        }
-
-        if (norm(force_vector) < 1e-6)
-            break; // No meaningful force to move the seed
-
-        // Normalize force
-        double fmag = norm(force_vector);
-        force_vector.x /= fmag;
-        force_vector.y /= fmag;
-
-        // Step size increases each attempt
-        double step_size = min_dist * 0.2 * (1 + attempt * 0.1);
-
-        // Try the new position
-        Point new_seed(
-            cvRound(seed.x + force_vector.x * step_size),
-            cvRound(seed.y + force_vector.y * step_size));
-
-        // Keep within image
-        new_seed.x = max(0, min(img_width - 1, new_seed.x));
-        new_seed.y = max(0, min(img_height - 1, new_seed.y));
-
-        // Check if new position improves the minimum distance
-        double new_min_dist = DBL_MAX;
-        for (const Point &violator : violation_seeds)
-        {
-            double dist = norm(new_seed - violator);
-            new_min_dist = min(new_min_dist, dist);
-        }
-
-        // If it improves (or at least doesn't worsen), update seed
-        if (new_min_dist > current_min_dist)
-        {
-            seed = new_seed;
-            current_min_dist = new_min_dist;
-        }
-        else
-        {
-            // Not an improvement, stop force attempts
+        const double s = s0 * shrink;
+        const double d_cc = std::sqrt(3.0) * s; // centre-to-centre
+        if (d_cc <= d_req + SAFETY + 1e-6)      // cannot shrink more
             break;
-        }
-    }
 
-    //--- 2) Systematic search in multiple directions if force-based failed
-    Point best_seed = seed;
-    double best_min_violation_dist = current_min_dist;
+        // jitter radius keeps safety margin intact
+        double r_jit = 0.5 * (d_cc - (d_req + SAFETY));
+        const double r_in = 0.5 * std::sqrt(3.0) * s; // in-radius
+        r_jit = std::min(r_jit, 0.95 * r_in);
 
-    for (int i = 0; i < NUM_DIRECTIONS; i++)
-    {
-        double angle = 2.0 * CV_PI * i / NUM_DIRECTIONS;
-        for (double radius_mult = 0.5; radius_mult <= MAX_RADIUS_MULTIPLIER; radius_mult += 0.25)
+        const double pad = r_jit;             // grid overscan
+        const double dx = std::sqrt(3.0) * s; // lattice step x
+        const double dy = 1.5 * s;            // lattice step y
+
+        candidates.clear();
+        int int_row_idx = 0;                                       // Integer row index for staggering
+        for (double y = -pad; y < M + pad; y += dy, ++int_row_idx) // y is the y-center
         {
-            double radius = min_dist * radius_mult;
-            Point test_seed(
-                cvRound(original_seed.x + cos(angle) * radius),
-                cvRound(original_seed.y + sin(angle) * radius));
-
-            // Stay in bounds
-            test_seed.x = max(0, min(img_width - 1, test_seed.x));
-            test_seed.y = max(0, min(img_height - 1, test_seed.y));
-
-            // Check minimum distance to violating neighbors
-            double local_min_dist = DBL_MAX;
-            bool satisfies_all = true;
-            for (const Point &violator : violation_seeds)
+            // Fixed BUG: Use integer row index for robust staggering logic
+            const double x0 = (int_row_idx & 1 ? 0.5 * dx : 0.0) - pad;
+            for (double x = x0; x < N + pad; x += dx) // x is the x-center
             {
-                double dist = norm(test_seed - violator);
-                local_min_dist = min(local_min_dist, dist);
-                if (dist < min_dist)
-                    satisfies_all = false;
-            }
-
-            // If fully satisfied, update and return
-            if (satisfies_all)
-            {
-                seed = test_seed;
-                return true;
-            }
-
-            // Otherwise track best improvement
-            if (local_min_dist > best_min_violation_dist)
-            {
-                best_min_violation_dist = local_min_dist;
-                best_seed = test_seed;
+                const double rho = rng.uniform(0.0, r_jit);
+                const double theta = rng.uniform(0.0, 2 * CV_PI);
+                const double px = x + rho * std::cos(theta);
+                const double py = y + rho * std::sin(theta);
+                if (0 <= px && px < N && 0 <= py && py < M)
+                    candidates.emplace_back(px, py);
             }
         }
+        if (static_cast<int>(candidates.size()) >= k)
+            break;
+        shrink *= 0.98; // 2 % denser and try again
     }
 
-    // If we found a slightly better position, use that
-    if (best_min_violation_dist > current_min_dist)
+    if (static_cast<int>(candidates.size()) < k)
     {
-        seed = best_seed;
-        cout << "Could not fully satisfy constraints, but improved min distance from "
-             << current_min_dist << " to " << best_min_violation_dist
-             << " (required: " << min_dist << ")" << endl;
-        return true;
-    }
+        print_sth(MSG_WARNING, format_string("Could only place %zu points with requested spacing (requested %d)", candidates.size(), k));
+        print_sth(MSG_PROMPT, "Proceed with fewer points? (y/n)");
 
-    // Failed to improve enough
-    cout << "Failed to adjust seed at (" << original_seed.x << ", " << original_seed.y
-         << ") with min_dist=" << min_dist
-         << ". Closest violation distance remained: " << current_min_dist << endl;
-    return false;
-}
-
-vector<Point> jittered_hex_grid_sample(const Mat &marker_mask, int k, double temperature, double sigma, bool zoomToEdge = true)
-{
-    int M = marker_mask.rows;                    // Image height
-    int N = marker_mask.cols;                    // Image width
-    double min_dist = sqrt((double)(M * N) / k); // Minimum distance required
-    // double scaled_min_dist = sigma * min_dist;   // Scaled minimum distance
-    double scaled_min_dist = ceil(min_dist); // Scaled minimum distance
-
-    double spacing = scaled_min_dist;
-    double h_spacing = spacing;
-    double v_spacing = spacing * sqrt(3) / 2;
-
-    RNG rng(getTickCount());
-
-    vector<Point> seeds;
-    vector<Point> neighbor_seeds;
-    for (double y = 0; y < M && seeds.size() < k; y += v_spacing)
-    {
-        bool odd_row = (int)(y / v_spacing) % 2 == 1;
-        double row_offset = odd_row ? h_spacing / 2 : 0;
-
-        for (double x = row_offset; x < N && seeds.size() < k; x += h_spacing)
+        while (true)
         {
-            double final_x = x;
-            double final_y = y;
+            print_sth(MSG_PLAIN, "> ", false);
+            std::string user_choice;
+            std::getline(std::cin, user_choice);
 
-            if (temperature > 0)
+            if (user_choice == "y" || user_choice == "Y")
             {
-                double max_jitter = spacing * 0.29 * temperature;
-                final_x += rng.uniform(-max_jitter, max_jitter);
-                final_y += rng.uniform(-max_jitter, max_jitter);
+                print_sth(MSG_INFO, format_string("Proceeding with %zu points", candidates.size()));
+                k = static_cast<int>(candidates.size());
+                break;
             }
-
-            // Ensure point is within image boundaries
-            if (final_x >= 0 && final_x < N && final_y >= 0 && final_y < M)
+            else if (user_choice == "n" || user_choice == "N")
             {
-                // Convert to int for storage
-                seeds.push_back(Point(round(final_x), round(final_y)));
-            }
-        }
-    }
-
-    if (zoomToEdge)
-    {
-        if (seeds.size() > 0)
-        {
-            int min_x = N, min_y = M, max_x = 0, max_y = 0;
-            for (const Point &p : seeds)
-            {
-                min_x = min(min_x, p.x);
-                min_y = min(min_y, p.y);
-                max_x = max(max_x, p.x);
-                max_y = max(max_y, p.y);
-            }
-
-            for (Point &p : seeds)
-            {
-                double mapped_x = ((double)(p.x - min_x) / (max_x - min_x)) * (N - 1);
-                double mapped_y = ((double)(p.y - min_y) / (max_y - min_y)) * (M - 1);
-
-                p.x = round(mapped_x);
-                p.y = round(mapped_y);
-            }
-        }
-    }
-
-    // Print information about generated points
-    printf("Generated %zu seed points using jittered hex grid sampling\n", seeds.size());
-    printf("Minimum distance threshold: %.2f pixels\n", min_dist);
-    printf("Scaled distance threshold: %.2f pixels\n", scaled_min_dist);
-
-    bool distanceConstraintMet = verifyMinimumDistance(seeds, min_dist);
-    if (distanceConstraintMet)
-    {
-        printf("All seeds satisfy the minimum distance constraint\n");
-    }
-    else
-    {
-        printf("Warning: Some seeds do not satisfy the minimum distance constraint\n");
-    }
-    sampleDebugLog(marker_mask, seeds, min_dist);
-
-#ifdef DEBUG
-    cout << "Do you want to try adjusting seeds to satisfy min distance requirement? [y/n]" << endl;
-    cout << "press enter to skip" << endl;
-    cout << ">";
-    string input;
-    getline(cin, input);
-    if (!input.empty())
-    {
-        if (input == "y")
-        {
-            // Adjust seeds based on hex grid structure
-            bool adjusted = false;
-            int iteration_count = 0;
-            int max_iterations = 5;
-
-            cout << "Adjusting seeds to satisfy minimum distance requirements..." << endl;
-
-            // Map to track which seeds have been processed
-            vector<bool> processed(seeds.size(), false);
-
-            // Adjust until all seeds meet the constraint or max iterations reached
-            while (iteration_count < max_iterations)
-            {
-                adjusted = false;
-
-                // Create a data structure to quickly find neighboring seeds
-                vector<vector<int>> neighbors(seeds.size());
-
-                // Find potential neighbors for each seed
-                for (int i = 0; i < seeds.size(); i++)
-                {
-                    for (int j = i + 1; j < seeds.size(); j++) // TODO replace enumeration of neighboring seeds with better approach
-                    {
-                        double dist = norm(seeds[i] - seeds[j]);
-                        // Use a slightly larger threshold to include potential neighbors
-                        if (dist < min_dist * 1.5)
-                        {
-                            neighbors[i].push_back(j);
-                            neighbors[j].push_back(i);
-                        }
-                    }
-                }
-
-                // Process each seed and its neighbors
-                for (int i = 0; i < seeds.size(); i++)
-                {
-                    if (processed[i])
-                        continue;
-
-                    vector<Point> violating_neighbors;
-                    for (int j : neighbors[i])
-                    {
-                        double dist = norm(seeds[i] - seeds[j]);
-                        if (dist < min_dist)
-                        {
-                            violating_neighbors.push_back(seeds[j]);
-                        }
-                    }
-
-                    // If there are violations, try to adjust the seed
-                    if (!violating_neighbors.empty())
-                    {
-                        bool success = try_adjust_seeds(seeds[i], violating_neighbors, min_dist, marker_mask);
-                        if (success)
-                        {
-                            adjusted = true;
-                            processed[i] = true;
-                        }
-                    }
-                    else
-                    {
-                        processed[i] = true; // No violations, mark as processed
-                    }
-                }
-
-                // Check if we've made any adjustments in this iteration
-                if (!adjusted)
-                {
-                    cout << "No further adjustments possible after " << iteration_count + 1 << " iterations." << endl;
-                    break;
-                }
-
-                iteration_count++;
-
-                // Check if we now satisfy the distance constraint
-                bool currentDistanceConstraintMet = verifyMinimumDistance(seeds, min_dist);
-                if (currentDistanceConstraintMet)
-                {
-                    cout << "All distance constraints satisfied after " << iteration_count << " iterations!" << endl;
-                    break;
-                }
-            }
-
-            // Final check
-            bool distanceConstraintMet = verifyMinimumDistance(seeds, min_dist);
-            if (distanceConstraintMet)
-            {
-                printf("Now all seeds satisfy the minimum distance constraint\n");
+                throw std::runtime_error("User aborted: Could not place requested number of points");
             }
             else
             {
-                printf("Warning: Some seeds still do not satisfy the minimum distance constraint\n");
+                print_sth(MSG_WARNING, "Please enter 'y' to proceed or 'n' to abort");
             }
-            sampleDebugLog(marker_mask, seeds, min_dist);
-        }
-        else if (input == "n")
-        {
-            ;
-        }
-        else
-        {
-            cout << "invalid input, skip adjusting" << endl;
         }
     }
+
+    // -------------- choose exactly k of them ----------------------------------
+    std::shuffle(candidates.begin(), candidates.end(),
+                 std::mt19937_64{std::random_device{}()}); // Fixed BUG: Use random_device for seed
+    candidates.resize(k);
+
+    // -------------- convert to int pixels (duplicates cannot happen) ----------
+    std::vector<cv::Point> out;
+    out.reserve(k);
+    for (const auto &p : candidates)
+        out.emplace_back(static_cast<int>(std::round(p.x)),
+                         static_cast<int>(std::round(p.y)));
+
+#ifdef _DEBUG
+    // verify guarantee in float domain
+    for (int i = 0; i < k; ++i)
+        for (int j = i + 1; j < k; ++j)
+            if (cv::norm(candidates[i] - candidates[j]) <= d_req - 1e-6)
+                throw std::logic_error("distance guarantee violated – should never happen");
 #endif
 
-    return seeds;
+    print_sth(MSG_INFO, format_string("Hex sampler: generated %d points, min-distance %.3f px", k, d_req));
+    return out;
 }
 
 vector<Point> jittered_grid_sample(const Mat &marker_mask, int k, double temperature, bool zoomToEdge = true)
@@ -880,23 +950,23 @@ vector<Point> jittered_grid_sample(const Mat &marker_mask, int k, double tempera
                     p.y = max(0, min(M - 1, p.y));
                 }
 
-                printf("Applied scaling factor of %.2f to better distribute points\n", scale);
+                print_sth(MSG_INFO, format_string("Applied scaling factor of %.2f to better distribute points.", scale));
             }
         }
     }
     // Print information about generated points
-    printf("Generated %zu seed points using jittered grid sampling\n", seeds.size());
-    printf("Minimum distance threshold: %.2f pixels\n", min_dist);
-    printf("Grid dimensions: %d rows x %d columns\n", grid_rows, grid_cols);
+    print_sth(MSG_INFO, format_string("Generated %zu seed points using jittered grid sampling.", seeds.size()));
+    print_sth(MSG_INFO, format_string("Target minimum distance threshold: %.2f pixels.", min_dist));
+    print_sth(MSG_INFO, format_string("Grid dimensions: %d rows x %d columns.", grid_rows, grid_cols));
 
     bool distanceConstraintMet = verifyMinimumDistance(seeds, min_dist);
     if (distanceConstraintMet)
     {
-        printf("Now all seeds satisfy the minimum distance constraint\n");
+        print_sth(MSG_SUCCESS, "All seeds satisfy the minimum distance constraint.");
     }
     else
     {
-        printf("Warning: Some seeds still do not satisfy the minimum distance constraint\n");
+        print_sth(MSG_WARNING, "Some seeds do not satisfy the minimum distance constraint.");
     }
 
     sampleDebugLog(marker_mask, seeds, min_dist);
@@ -1071,7 +1141,8 @@ vector<Point> cyj_generateSeeds(int K, int rows, int cols)
 
     if (seeds.size() < K)
     {
-        cerr << "Warning: Could not generate " << K << " seeds. Generated " << seeds.size() << " seeds instead." << endl;
+        // cerr << "Warning: Could not generate " << K << " seeds. Generated " << seeds.size() << " seeds instead." << endl;
+        print_sth(MSG_WARNING, format_string("Could not generate %d seeds. Generated %zu seeds instead.", K, seeds.size()));
     }
 
     return seeds;
@@ -1080,12 +1151,12 @@ vector<Point> cyj_generateSeeds(int K, int rows, int cols)
 vector<Point> generate_seeds(const Mat &img, Mat &marker_mask, int k, double temperature, double sigma)
 {
     double t = (double)getTickCount();
+    print_sth(MSG_INFO, "Generating seed points...");
 
     // Use 8-bit mask for visualization and 32-bit for watershed
     marker_mask = Mat::zeros(img.size(), CV_8UC1);
 
     // generate k random seed points in marker_mask
-    // vector<Point> seeds = jittered_grid_sample(marker_mask, k, temperature);
     vector<Point> seeds = jittered_hex_grid_sample(marker_mask, k, temperature, sigma, true);
 
     // Draw smaller circles for markers to avoid overlapping
@@ -1097,16 +1168,17 @@ vector<Point> generate_seeds(const Mat &img, Mat &marker_mask, int k, double tem
     }
 
     t = (double)getTickCount() - t;
-    printf("seeds generation time cost = %gms\n", t / getTickFrequency() * 1000.);
+    print_sth(MSG_SUCCESS, format_string("Seed generation time cost = %.2f ms", t / getTickFrequency() * 1000.));
 
     return seeds;
 }
 
-void print_welcome() // TODO print_welcome
+void print_welcome()
 {
-    cout << "===" << "opencv watershed lab program" << "===" << endl;
+    print_sth(MSG_HEADER, "OpenCV Watershed Lab Program");
+    print_sth(MSG_INFO, "===================================");
 }
-#endif
+
 vector<pair<int, int>> get_area_values(Mat &markers)
 {
     // Returns vector of pairs: {area_value, marker_id}
@@ -1141,10 +1213,59 @@ vector<pair<int, int>> get_area_values(Mat &markers)
 
 void heap_sort(vector<pair<int, int>> &area_values)
 {
-    sort(area_values.begin(), area_values.end(), [](pair<int, int> a, pair<int, int> b)
-         { return a.second < b.second; });
-    // TODO use heap sort instead
+    // sort(area_values.begin(), area_values.end(), [](pair<int, int> a, pair<int, int> b)
+    //      { return a.second < b.second; });
+
+    // Implement actual heap sort algorithm
+    int n_total = area_values.size();
+    if (n_total <= 1) // No need to sort if 0 or 1 elements
+    {
+        return;
+    }
+
+    std::function<void(int, int)> heapify_func; // Declare std::function for heapify
+
+    // Define the heapify lambda
+    heapify_func = [&](int current_heap_size, int root_idx)
+    {
+        int largest = root_idx;       // Initialize largest as root
+        int left = 2 * root_idx + 1;  // Left child
+        int right = 2 * root_idx + 2; // Right child
+
+        // If left child is larger than current largest
+        if (left < current_heap_size && area_values[left].second > area_values[largest].second)
+            largest = left;
+
+        // If right child is larger than current largest
+        if (right < current_heap_size && area_values[right].second > area_values[largest].second)
+            largest = right;
+
+        // If largest is not root
+        if (largest != root_idx)
+        {
+            swap(area_values[root_idx], area_values[largest]);
+
+            // Recursively heapify the affected sub-tree
+            heapify_func(current_heap_size, largest);
+        }
+    };
+
+    // Build max heap (rearrange array)
+    // Iterate from the last non-leaf node up to the root
+    for (int i = n_total / 2 - 1; i >= 0; i--)
+        heapify_func(n_total, i);
+
+    // Extract elements from heap one by one
+    for (int i = n_total - 1; i > 0; i--)
+    {
+        // Move current root (max element) to end of the unsorted portion
+        swap(area_values[0], area_values[i]);
+
+        // Call heapify on the reduced heap (size is now 'i', root is 0)
+        heapify_func(i, 0);
+    }
 }
+
 int binary_search(vector<pair<int, int>> &area_values, int val, bool is_lower_bound)
 {
     int l = 0;
@@ -1174,47 +1295,49 @@ int binary_search(vector<pair<int, int>> &area_values, int val, bool is_lower_bo
                 l = m + 1;
             }
         }
-        if (area_values[l].second > val)
+        // Check if l is a valid index before accessing area_values[l]
+        if (l < area_values.size() && area_values[l].second >= val) // Changed > to >= for lower_bound logic
         {
             return l;
         }
         else
         {
-            cout << "ERROR: can't find area value bigger than " << val << endl;
-            return -1;
+            // It's possible no value is >= val, especially if val is > max element.
+            // In a typical lower_bound, this would return area_values.size().
+            // For this specific use case, returning -1 for "not found" or "out of bounds"
+            print_sth(MSG_ERROR, format_string("Can't find area value greater than or equal to %d. Max value is %d.", val, area_values.back().second));
+            return -1; // Or area_values.size() if following std::lower_bound convention
         }
     }
-    else
+    else // is_upper_bound (finding index of first element > val, then subtract 1 for element <= val)
     {
-        // 1 3 5
-        // 4
-        // l r m
-        // 0 3 1
-        // 1 3 2
-        // 1 1 2
-        while (l < r)
+        // This logic seems to be for finding an element strictly less than val,
+        // or the largest element <= val. Let's clarify the intent for upper_bound.
+        // A common use of upper_bound is to find the first element *greater* than val.
+        // If we want the largest element *less than or equal to* val:
+        l = 0;
+        r = area_values.size() - 1; // search within valid indices
+        int ans = -1;
+        while (l <= r)
         {
-            m = (l + r) / 2;
-            if (area_values[m].second == val)
+            m = l + (r - l) / 2;
+            if (area_values[m].second <= val)
             {
-                return m;
-            }
-            else if (area_values[m].second > val)
-            {
-                r = m - 1;
+                ans = m;   // potential answer
+                l = m + 1; // try to find a larger one
             }
             else
             {
-                l = m;
+                r = m - 1;
             }
         }
-        if (area_values[l].second < val)
+        if (ans != -1)
         {
-            return l;
+            return ans;
         }
         else
         {
-            cout << "ERROR: can't find area value less than " << val << endl;
+            print_sth(MSG_ERROR, format_string("Can't find area value less than or equal to %d. Min value is %d.", val, area_values.front().second));
             return -1;
         }
     }
@@ -1223,15 +1346,15 @@ int binary_search(vector<pair<int, int>> &area_values, int val, bool is_lower_bo
 // Get area range from user input
 void get_area_range(int &lower_bound, int &upper_bound, int min_possible_area, int max_possible_area)
 {
-    std::cout << "Please input the lower bound for area search." << std::endl;
+    print_sth(MSG_PROMPT, "Please input the lower bound for area search.");
     if (min_possible_area <= max_possible_area && min_possible_area >= 0)
     {
-        std::cout << "Min recorded area is " << min_possible_area << ". Example: " << min_possible_area << std::endl;
+        print_sth(MSG_INFO, format_string("Min recorded area is %d. Example: %d", min_possible_area, min_possible_area));
     }
 
     while (true)
     {
-        std::cout << "Lower bound > ";
+        print_sth(MSG_PLAIN, "Lower bound > ", false);
         std::string input;
         std::getline(std::cin, input);
         if (!input.empty())
@@ -1241,7 +1364,7 @@ void get_area_range(int &lower_bound, int &upper_bound, int min_possible_area, i
                 lower_bound = std::stoi(input);
                 if (lower_bound < 0)
                 {
-                    std::cout << "Area cannot be negative. Please enter a valid non-negative number." << std::endl;
+                    print_sth(MSG_WARNING, "Area cannot be negative. Please enter a valid non-negative number.");
                 }
                 else
                 {
@@ -1250,27 +1373,27 @@ void get_area_range(int &lower_bound, int &upper_bound, int min_possible_area, i
             }
             catch (const std::invalid_argument &e)
             {
-                std::cout << "Invalid input! Please enter a valid number." << std::endl;
+                print_sth(MSG_ERROR, "Invalid input! Please enter a valid number.");
             }
             catch (const std::out_of_range &e)
             {
-                std::cout << "Input is too large! Please enter a valid number." << std::endl;
+                print_sth(MSG_ERROR, "Input is too large! Please enter a valid number.");
             }
         }
         else
         {
-            std::cout << "Please input a lower bound!" << std::endl;
+            print_sth(MSG_PROMPT, "Please input a lower bound!");
         }
     }
 
-    std::cout << "Please input the upper bound for area search." << std::endl;
+    print_sth(MSG_PROMPT, "Please input the upper bound for area search.");
     if (min_possible_area <= max_possible_area && max_possible_area >= 0)
     {
-        std::cout << "Max recorded area is " << max_possible_area << ". Example: " << max_possible_area << std::endl;
+        print_sth(MSG_INFO, format_string("Max recorded area is %d. Example: %d", max_possible_area, max_possible_area));
     }
     while (true)
     {
-        std::cout << "Upper bound > ";
+        print_sth(MSG_PLAIN, "Upper bound > ", false);
         std::string input;
         std::getline(std::cin, input);
         if (!input.empty())
@@ -1280,7 +1403,7 @@ void get_area_range(int &lower_bound, int &upper_bound, int min_possible_area, i
                 upper_bound = std::stoi(input);
                 if (upper_bound < lower_bound)
                 {
-                    std::cout << "Upper bound cannot be less than lower bound (" << lower_bound << ")." << std::endl;
+                    print_sth(MSG_WARNING, format_string("Upper bound (%d) cannot be less than lower bound (%d).", upper_bound, lower_bound));
                 }
                 else
                 {
@@ -1289,18 +1412,18 @@ void get_area_range(int &lower_bound, int &upper_bound, int min_possible_area, i
             }
             catch (const std::invalid_argument &e)
             {
-                std::cout << "Invalid input! Please enter a valid number." << std::endl;
+                print_sth(MSG_ERROR, "Invalid input! Please enter a valid number.");
             }
             catch (const std::out_of_range &e)
             {
-                std::cout << "Input is too large! Please enter a valid number." << std::endl;
+                print_sth(MSG_ERROR, "Input is too large! Please enter a valid number.");
             }
         }
         else
         {
-            std::cout << "Please input an upper bound!" << std::endl;
+            print_sth(MSG_PROMPT, "Please input an upper bound!");
         }
     }
 }
 
-// WATERSHED_UTILS_H
+#endif // WATERSHED_UTILS_H

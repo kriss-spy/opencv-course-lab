@@ -346,9 +346,7 @@ void setupWindows_task2()
     namedWindow("four color result", 1);
     imshow("image", img);
     imshow("watershed transform", wshed);
-#ifdef DEBUG
     setMouseCallback("four color result", on_mouse_four_color_result, 0);
-#endif
     task2_next_step = GENERATE_SEEDS;
 }
 
@@ -378,10 +376,10 @@ void runEventLoop_task2(vector<Point> &seeds)
             imshow("image", img);
             wshed = img0.clone();
             imshow("watershed transform", wshed);
-            // TODO next step state restore to watershed
+            task2_next_step = GENERATE_SEEDS;
         }
 
-        if (c == 'g') // generate seeds
+        if (c == 'g' && task2_next_step == GENERATE_SEEDS) // generate seeds
         {
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
@@ -553,8 +551,8 @@ void runEventLoop_task2(vector<Point> &seeds)
 
 #ifdef DEBUG
             // Create a version of the four-color result with seed points
-            visualize_regions("four color result", four_color_result, seeds, markers); // BUG region numbering not right, some are even -1
-                                                                                       // note that region numbering is markers.at<seed>
+            visualize_regions("four color result", four_color_result, seeds, markers);
+            // note that region numbering is markers.at<seed>
 #endif
 
             // Verify that the four-coloring is valid

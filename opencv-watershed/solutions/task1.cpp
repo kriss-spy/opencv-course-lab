@@ -106,12 +106,13 @@ int main(int argc, char **argv)
             imshow("image", img);
             wshed = img0.clone();
             imshow("watershed transform", wshed);
+            task1_next_step = GENERATE_SEEDS;
         }
         if (c == 'v' && task1_next_step == WATERSHED)
         {
             visualize_points("image", img, seeds, 200);
         }
-        if (c == 'g') // generate seeds
+        if (c == 'g' && task1_next_step == GENERATE_SEEDS) // generate seeds
         {
             marker_mask = Scalar::all(0);
             img0.copyTo(img);
