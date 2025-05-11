@@ -29,6 +29,7 @@
 #include <queue>
 #include <stack>
 #include <unordered_set>
+#include <algorithm>         // Added for std::sort
 #include "watershed_utils.h" // Include the utility functions
 #include "sample.h"
 
@@ -258,33 +259,55 @@ vector<int> fourColorRegions(const vector<vector<int>> &adjacency_list, int tota
     return colors;
 }
 
-// Improved four-coloring with backtracking
-bool colorRegionBacktracking(int region, vector<int> &colors, const vector<vector<int>> &adjacency_list, int total_regions)
+// Structure to hold region ID and its degree for sorting
+struct RegionInfo
 {
-    if (region > total_regions)
+    int id;
+    int degree;
+
+    bool operator<(const RegionInfo &other) const
     {
-        return true; // All regions are colored successfully
+        // Primary sort: by degree descending (most constrained first)
+        if (degree != other.degree)
+        {
+            return degree > other.degree;
+        }
+        // Secondary sort: by ID ascending (for stability/determinism)
+        return id < other.id;
+    }
+};
+
+// Modified backtracking function using a pre-sorted list of regions by degree
+bool solveColoringRecursive(int region_idx_in_sorted_list,
+                            const vector<RegionInfo> &sorted_regions_list,
+                            vector<int> &colors,
+                            const vector<vector<int>> &adjacency_list,
+                            int total_regions_count)
+{
+    if (region_idx_in_sorted_list == total_regions_count)
+    {
+        return true; // All regions processed and colored
     }
 
-    // Try each of the four colors
-    for (int color = 0; color < 4; color++)
-    {
-        if (isValidColor(region, color, colors, adjacency_list))
-        {
-            colors[region] = color;
+    int current_region_id = sorted_regions_list[region_idx_in_sorted_list].id;
 
-            // Recursively color the next region
-            if (colorRegionBacktracking(region + 1, colors, adjacency_list, total_regions))
+    // Try each of the four colors
+    for (int color = 0; color < 4; ++color)
+    {
+        if (isValidColor(current_region_id, color, colors, adjacency_list))
+        {
+            colors[current_region_id] = color;
+
+            if (solveColoringRecursive(region_idx_in_sorted_list + 1, sorted_regions_list, colors, adjacency_list, total_regions_count))
             {
                 return true;
             }
 
-            // If we're here, this color didn't work, so backtrack
-            colors[region] = -1;
+            colors[current_region_id] = -1; // Backtrack
         }
     }
 
-    return false; // No solution found
+    return false; // No color worked for current_region_id
 }
 
 // Get most connected region as starting point
@@ -480,8 +503,17 @@ void runEventLoop_task2(vector<Point> &seeds)
             double t_color = (double)getTickCount();
             vector<int> colors(total_regions + 1, -1);
 
-            // Use backtracking for robust coloring
-            bool coloring_successful = colorRegionBacktracking(1, colors, adjacency_list, total_regions);
+            // Prepare sorted list of regions by degree (descending)
+            vector<RegionInfo> sorted_region_list(total_regions);
+            for (int i = 0; i < total_regions; ++i)
+            {
+                sorted_region_list[i].id = i + 1; // Region IDs are 1-based
+                sorted_region_list[i].degree = adjacency_list[i + 1].size();
+            }
+            std::sort(sorted_region_list.begin(), sorted_region_list.end());
+
+            // Use optimized backtracking with sorted regions
+            bool coloring_successful = solveColoringRecursive(0, sorted_region_list, colors, adjacency_list, total_regions);
 
             t_color = (double)getTickCount() - t_color;
             printf("Four-coloring time = %gms\n", t_color / getTickFrequency() * 1000.);
@@ -578,68 +610,7 @@ void runEventLoop_task2(vector<Point> &seeds)
                 cout << "Four-coloring verification: FAILED" << endl;
             }
 
-            if (task2_next_step == FOURCOLOR) // This outer if might be redundant if already inside 'c' and FOURCOLOR state
-            {
-                // The four_color_output variable was previously assigned the result of fourColorRegions.
-                // Now, we use the 'colors' vector directly to create the visualization.
-                // We need to ensure g_four_color_result_base_img is populated correctly.
-                // The existing code block for visualization using 'colors' vector is fine.
-                // The part that calls fourColorRegions again to get four_color_output is removed.
-
-                // Apply four-color result to the image (this part is already in the code)
-                Mat four_color_visual_result = img0.clone();
-                for (int i = 0; i < markers.rows; i++)
-                {
-                    for (int j = 0; j < markers.cols; j++)
-                    {
-                        int region_idx = markers.at<int>(i, j);
-                        Vec3b &pixel = four_color_visual_result.at<Vec3b>(i, j);
-                        if (region_idx == -1)
-                            pixel = Vec3b(255, 255, 255);
-                        else if (region_idx <= 0 || region_idx > total_regions)
-                            pixel = Vec3b(0, 0, 0);
-                        else
-                        {
-                            int color_idx = colors[region_idx];
-                            if (color_idx >= 0 && color_idx < 4)
-                                pixel = FOUR_COLOR_PALETTE[color_idx];
-                            else
-                                pixel = Vec3b(128, 128, 128); // Should not happen if coloring_successful
-                        }
-                    }
-                }
-
-#ifdef DEBUG
-                visualize_regions("four color result", four_color_visual_result, seeds, markers);
-#endif
-
-                // Update g_four_color_result_base_img for mouse callback
-                four_color_visual_result.copyTo(g_four_color_result_base_img);
-
-                // Display initial text on the GUI
-                Mat display_img_with_text = g_four_color_result_base_img.clone();
-                Point text_origin(10, display_img_with_text.rows - 10);
-                Scalar text_color_main(255, 255, 255);
-                Scalar text_color_outline(0, 0, 0);
-                double font_scale = 0.4;
-                int thickness_main = 1;
-                int thickness_outline = 2;
-                string initial_text = g_mouse_marker_text;
-                if (markers.empty() || total_regions == 0)
-                    initial_text = "Perform Watershed first (w)";
-                else if (!coloring_successful)
-                    initial_text = "Coloring failed. Check console.";
-
-                putText(display_img_with_text, initial_text, text_origin, FONT_HERSHEY_SIMPLEX, font_scale, text_color_outline, thickness_outline, LINE_AA);
-                putText(display_img_with_text, initial_text, text_origin, FONT_HERSHEY_SIMPLEX, font_scale, text_color_main, thickness_main, LINE_AA);
-                imshow("four color result", display_img_with_text);
-
-                task2_next_step = EXIT;
-            }
-            else
-            {
-                // ...existing code...
-            }
+            imshow("four color result", four_color_result);
         }
     }
 }
