@@ -268,33 +268,40 @@ map<int, string> performHuffmanCoding(const vector<pair<int, int>> &regions_data
     // Special case: only one region/node
     if (pq.size() == 1)
     {
+        // Measure build time for single-node tree
+        double start = (double)getTickCount();
         HuffmanNode *root = pq.top();
         pq.pop();
-        generateHuffmanCodesRecursive(root, "", huffman_codes_map); // Assign "0" or ""
-        delete root;                                                // Clean up the single node
+        double buildTime = ((double)getTickCount() - start) / getTickFrequency() * 1000.0;
+        cout << "Huffman tree building time: " << buildTime << " ms" << endl;
+
+        generateHuffmanCodesRecursive(root, "", huffman_codes_map);
+        delete root;
         return huffman_codes_map;
     }
 
-    // Iterate while size of priority queue is more than 1
+    // --- multi-node Huffman tree build: measure time ---
+    double start = (double)getTickCount();
     while (pq.size() > 1)
     {
         HuffmanNode *left = pq.top();
         pq.pop();
-
         HuffmanNode *right = pq.top();
         pq.pop();
-
-        // Create a new internal node with frequency equal to the sum of the two nodes' frequencies.
-        // Label is -1 for internal nodes.
         HuffmanNode *top = new HuffmanNode(-1, left->area + right->area);
         top->left = left;
         top->right = right;
         pq.push(top);
     }
+    HuffmanNode *root = pq.top();
+    pq.pop();
+    double buildTime = ((double)getTickCount() - start) / getTickFrequency() * 1000.0;
+    cout << "Huffman tree building time: " << buildTime << " ms" << endl;
+    // --- end timing ---
 
     // The remaining node is the root of the Huffman Tree
-    HuffmanNode *root = pq.top();
-    pq.pop(); // pq should be empty now
+    // HuffmanNode *root = pq.top();
+    // pq.pop(); // pq should be empty now
 
 #ifdef DEBUG
     cout << "--- Huffman Tree Structure (Debug) ---" << endl;
@@ -375,6 +382,16 @@ void runEventLoop_task3(vector<Point> &seeds)
         if (c == 27 || c == 'q')
         {
             task3_next_step = EXIT;
+            // Clean up generated files
+            if (std::remove("huffman_tree.dot") != 0)
+            {
+                // perror("Error deleting huffman_tree.dot"); // Optional: error handling
+            }
+            if (std::remove("huffman_tree.png") != 0)
+            {
+                // perror("Error deleting huffman_tree.png"); // Optional: error handling
+            }
+            cout << "Exiting application and cleaning up generated files." << endl;
             break;
         }
         if (c == 'h')

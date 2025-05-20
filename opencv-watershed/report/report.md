@@ -145,22 +145,24 @@ fruits.jpg... in opencv-watershed/image/
 
 ### task1
 核心问题是如何在图像中随机取k个点，保证最小距离大于sqrt(M*N/k)。
-采样算法种类繁多，包括泊松圆盘采样，抖动网格采样等。
+采样算法种类繁多，包括泊松圆盘采样，抖动网格采样等。[@2DPointSets]
 因六边形网格法理论上采样点上限较高，首先构建六边形网格作为框架，再随机采样K种子点。
-//cite
 
 ### task2
 算法需要处理的数据为区域的邻接关系
+
 运用四原色法
+
 采用队列
+
 搜索可行的着色方案，实现对分水岭结果重新着色
-//cite
 
 ### task3
-对区域面积进行堆排序
+对区域面积进行堆排序[@Heapsort2025]
+
 折半查找用户输入的区间下界和上届
-对区间的的面积数据，构建哈夫曼树，并可视化
-//cite
+
+对区间的的面积数据，构建哈夫曼树[@HuffmanCoding2025]，并可视化
 
 ## 整体架构设计
 
@@ -335,9 +337,9 @@ Found 500 contours for watershed
 watershed exec time = 13.5976ms
 ```
 
-![](image/task1-normal-1.png)
+![task1 seed generation](image/task1-normal-1.png)
 
-![](image/task1-normal-2.png)
+![task1 watershed](image/task1-normal-2.png)
 
 ### 常规测试 - 任务二：四色图着色
 
@@ -351,10 +353,10 @@ YELLOW: 80 regions
 GREEN: 70 regions
 BLUE: 73 regions
 ℹ️ Visualized 300 regions with seed points in window 'four color result'
-Four-coloring verification: PASSE
+Four-coloring verification: PASSED
 ```
 
-![](image/task2-normal.png)
+![task2 four color](image/task2-normal.png)
 
 ### 常规测试 - 任务三：排序查找与哈夫曼编码
 
@@ -367,7 +369,7 @@ Highlighted min area region (Label: 63) in 'watershed transform' window.
 Highlighted max area region (Label: 177) in 'watershed transform' window.
 ```
 
-![](image/task3-normal-1.png)
+![task3 mark max min area](image/task3-normal-1.png)
 
 ```txt
 Please input the lower bound for area search.
@@ -387,23 +389,257 @@ Attempting to generate Huffman tree image using Graphviz...
 Huffman tree image 'huffman_tree.png' generated and displayed.
 Close the 'Huffman Tree' window to exit or continue.
 ```
-![](image/task3-normal-2.png)
+![task3 mark area within interval](image/task3-normal-2.png)
 
-![](image/task3-normal-3.png)
+![task3 huffman tree](image/task3-normal-3.png)
 
 ## 性能测试
-
 <!-- 性能测试主要评估程序在处理大规模数据时的效率和资源消耗情况。
-
 性能测试确保了程序在实际应用中能够高效稳定地运行，满足实时或准实时处理的需求。 -->
 
-## 稳定性测试
+### task1
+K=1000
+```txt
+Image size: 600x600 pixels
+Please input k (number of random seed points, e.g., 100, 500, 1000). Range: [1, 5000]
+> 1000
+Please input temperature (e.g., 0.0 to 1.0). Press enter to use default: 0.01
+> 
+ℹ️ Using default temperature: 0.01
+QSettings::value: Empty key passed
+QSettings::value: Empty key passed
+ℹ️ Generating seed points...
+ℹ️ Offset try 1: found 986 candidates
+ℹ️ Offset try 5: found 1003 candidates
+ℹ️ Hex sampler: generated 1000 points, min-distance 18.974 px
+✅ Seed generation time cost = 0.50 ms
+Found 1000 contours for watershed
+watershed exec time = 10.6721ms
+ℹ️ Generating seed points...
+ℹ️ Offset try 1: found 1003 candidates
+ℹ️ Hex sampler: generated 1000 points, min-distance 18.974 px
+✅ Seed generation time cost = 0.31 ms
+Found 1000 contours for watershed
+watershed exec time = 10.7746ms
+```
+### task2
 
+经过测试，四色方案搜索用时满足要求
+成功率有欠缺
+
+### task3
+K=1000
+用时满足要求
+```txt
+Please input k (number of random seed points, e.g., 100, 500, 1000). Range: [1, 5000]
+> 1000
+Please input temperature (e.g., 0.0 to 1.0). Press enter to use default: 0.01
+> 
+ℹ️ Using default temperature: 0.01
+QSettings::value: Empty key passed
+QSettings::value: Empty key passed
+ℹ️ Generating seed points...
+ℹ️ Offset try 1: found 986 candidates
+ℹ️ Offset try 4: found 1003 candidates
+ℹ️ Hex sampler: generated 1000 points, min-distance 18.974 px
+✅ Seed generation time cost = 0.50 ms
+Found 1000 contours for watershed
+watershed exec time = 12.4808ms
+getting area values...
+min area: 85 (label 30)
+max area: 754 (label 726)
+Highlighted min area region (Label: 30) in 'watershed transform' window.
+Highlighted max area region (Label: 726) in 'watershed transform' window.
+Please input the lower bound for area search.
+ℹ️ Min recorded area is 85. Example: 85
+Lower bound > 100 
+Please input the upper bound for area search.
+ℹ️ Max recorded area is 754. Example: 754
+Upper bound > 300
+Searching for regions with area between 100 and 300
+Found 462 regions within the range.
+Highlighted regions are shown in 'Search Area Value Range' window.
+
+Performing Huffman Coding for regions in range...
+Huffman tree building time: 0.070739 ms
+
+Attempting to generate Huffman tree image using Graphviz...
+Huffman tree image 'huffman_tree.png' generated and displayed.
+Close the 'Huffman Tree' window to exit or continue.
+```
+
+## 稳定性测试
+### task1
+K=1000时，能够稳定生成1000个种子点
+
+```txt
+Please input k (number of random seed points, e.g., 100, 500, 1000). Range: [1, 5000]
+> 1000
+Please input temperature (e.g., 0.0 to 1.0). Press enter to use default: 0.01
+> 
+ℹ️ Using default temperature: 0.01
+QSettings::value: Empty key passed
+QSettings::value: Empty key passed
+ℹ️ Generating seed points...
+ℹ️ Offset try 1: found 986 candidates
+ℹ️ Offset try 2: found 1003 candidates
+ℹ️ Hex sampler: generated 1000 points, min-distance 18.974 px
+✅ Seed generation time cost = 0.40 ms
+ℹ️ Visualized 1000 seed points in window 'image'
+ℹ️ Generating seed points...
+ℹ️ Offset try 1: found 1003 candidates
+ℹ️ Hex sampler: generated 1000 points, min-distance 18.974 px
+✅ Seed generation time cost = 0.22 ms
+ℹ️ Visualized 1000 seed points in window 'image'
+ℹ️ Generating seed points...
+ℹ️ Offset try 1: found 1003 candidates
+ℹ️ Hex sampler: generated 1000 points, min-distance 18.974 px
+✅ Seed generation time cost = 0.31 ms
+ℹ️ Visualized 1000 seed points in window 'image'
+ℹ️ Generating seed points...
+ℹ️ Offset try 1: found 986 candidates
+ℹ️ Offset try 2: found 1003 candidates
+ℹ️ Hex sampler: generated 1000 points, min-distance 18.974 px
+✅ Seed generation time cost = 0.42 ms
+ℹ️ Visualized 1000 seed points in window 'image'
+```
+
+### task2
+K=500，成功率约为40%，用时低于2s
+```
+Total regions for four-coloring: 500
+Adjacency list build time = 125.879ms
+Four-coloring time = 0.297333ms
+Color distribution:
+RED: 131 regions
+YELLOW: 129 regions
+GREEN: 123 regions
+BLUE: 117 regions
+Four-coloring verification: PASSED
+```
+
+K=100，失败率低于10%，用时低于0.5s
+```
+Total regions for four-coloring: 100
+Adjacency list build time = 29.2104ms
+Four-coloring time = 0.041375ms
+Color distribution:
+RED: 30 regions
+YELLOW: 27 regions
+GREEN: 22 regions
+BLUE: 21 regions
+Four-coloring verification: PASSED
+```
+### task3
+K=1000，用时满足要求
+
+```
+Found 1000 contours for watershed
+watershed exec time = 12.4808ms
+getting area values...
+min area: 85 (label 30)
+max area: 754 (label 726)
+Highlighted min area region (Label: 30) in 'watershed transform' window.
+Highlighted max area region (Label: 726) in 'watershed transform' window.
+Please input the lower bound for area search.
+ℹ️ Min recorded area is 85. Example: 85
+Lower bound > 100 
+Please input the upper bound for area search.
+ℹ️ Max recorded area is 754. Example: 754
+Upper bound > 300
+Searching for regions with area between 100 and 300
+Found 462 regions within the range.
+Highlighted regions are shown in 'Search Area Value Range' window.
+
+Performing Huffman Coding for regions in range...
+Huffman tree building time: 0.070739 ms
+
+Attempting to generate Huffman tree image using Graphviz...
+Huffman tree image 'huffman_tree.png' generated and displayed.
+Close the 'Huffman Tree' window to exit or continue.
+ℹ️ Generating seed points...
+ℹ️ Offset try 1: found 1003 candidates
+ℹ️ Hex sampler: generated 1000 points, min-distance 18.974 px
+✅ Seed generation time cost = 0.14 ms
+ℹ️ Visualized 1000 seed points in window 'image'
+Found 1000 contours for watershed
+watershed exec time = 15.1791ms
+getting area values...
+min area: 69 (label 499)
+max area: 914 (label 387)
+Highlighted min area region (Label: 499) in 'watershed transform' window.
+Highlighted max area region (Label: 387) in 'watershed transform' window.
+Please input the lower bound for area search.
+ℹ️ Min recorded area is 69. Example: 69
+Lower bound > 0
+Please input the upper bound for area search.
+ℹ️ Max recorded area is 914. Example: 914
+Upper bound > 1000
+Searching for regions with area between 0 and 1000
+Found 1000 regions within the range.
+Highlighted regions are shown in 'Search Area Value Range' window.
+
+Performing Huffman Coding for regions in range...
+Huffman tree building time: 0.124734 ms
+
+Attempting to generate Huffman tree image using Graphviz...
+dot: graph is too large for cairo-renderer bitmaps. Scaling by 0.82601 to fit
+Huffman tree image 'huffman_tree.png' generated and displayed.
+Close the 'Huffman Tree' window to exit or continue.
+```
 
 
 ## 边界情况测试
+### task1
+K=3时，能够随机生成种子点，没有观察到雷同现象
 
+### task2
+K=10时，能够正常着色
 
+```
+Please input k (number of random seed points, e.g., 100, 500, 1000). Range: [1, 5000]
+> 10
+Please input temperature (e.g., 0.0 to 1.0). Press enter to use default: 0.01
+> 
+ℹ️ Using default temperature: 0.01
+QSettings::value: Empty key passed
+QSettings::value: Empty key passed
+ℹ️ Generating seed points...
+ℹ️ Offset try 1: found 7 candidates
+ℹ️ Offset try 3: found 9 candidates
+ℹ️ Offset try 1: found 9 candidates
+ℹ️ Offset try 1: found 9 candidates
+ℹ️ Offset try 4: found 10 candidates
+ℹ️ Hex sampler: generated 10 points, min-distance 189.737 px
+✅ Seed generation time cost = 0.11 ms
+Found 10 contours for watershed
+watershed exec time = 12.0318ms
+ℹ️ Visualized 10 seed points in window 'watershed transform'
+Total regions for four-coloring: 10
+Adjacency list build time = 5.6254ms
+Four-coloring time = 0.007725ms
+Color distribution:
+RED: 3 regions
+YELLOW: 3 regions
+GREEN: 2 regions
+BLUE: 2 regions
+Four-coloring verification: PASSED
+```
+
+### task3
+K=30
+
+```
+ℹ️ Min recorded area is 553. Example: 553
+Lower bound > 500
+Please input the upper bound for area search.
+ℹ️ Max recorded area is 35497. Example: 35497
+Upper bound > 1000
+Searching for regions with area between 500 and 1000
+Found 3 regions within the range.
+```
+
+![task3 edge case huffman tree](image/task3-edge-3.png)
 
 ## 合法性测试
 
@@ -504,7 +740,7 @@ Highlighted regions are shown in 'Search Area Value Range' window.
 ## 测试结果
 
 <!-- 测试结果的汇总与分析。 -->
-
+程序能够较好地完成三个任务，在用时上高分过关，能够应对edge case，处理异常输入。其中task2的四颜色着色成功率还有待提高。
 
 # 总结展望
 
