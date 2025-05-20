@@ -1,0 +1,34 @@
+MD_FILE = report.md
+TEMPLATE_FILE = template.tex
+OUTPUT_PDF = output.pdf
+OUTPUT_DOCX = output.docx
+BUILD_DIR = build
+
+# Default target: build the PDF
+all: pdf
+
+# Conditional target to also build DOCX
+ifeq ($(TO_DOCX),true)
+all: docx
+endif
+
+# Rule to create the PDF
+pdf: $(BUILD_DIR)/$(OUTPUT_PDF)
+
+$(BUILD_DIR)/$(OUTPUT_PDF): $(MD_FILE) $(TEMPLATE_FILE)
+	@mkdir -p $(BUILD_DIR)
+	pandoc "$(MD_FILE)" --lua-filter=obsidian-link.lua --template=$(TEMPLATE_FILE) --pdf-engine=latexmk --pdf-engine-opt=-xelatex -o $(BUILD_DIR)/$(OUTPUT_PDF)
+
+# Rule to create the DOCX
+docx: $(BUILD_DIR)/$(OUTPUT_DOCX)
+
+$(BUILD_DIR)/$(OUTPUT_DOCX): $(MD_FILE) $(TEMPLATE_FILE)
+	@mkdir -p $(BUILD_DIR)
+	pandoc "$(MD_FILE)" --template=$(TEMPLATE_FILE) -o $(BUILD_DIR)/$(OUTPUT_DOCX)
+
+# Target to clean up build files
+clean:
+	rm -rf $(BUILD_DIR)
+
+# Phony targets are not files
+.PHONY: all clean pdf docx

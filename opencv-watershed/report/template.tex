@@ -1,0 +1,273 @@
+% !TEX program = xelatex
+\documentclass[UTF8]{ctexart}
+
+% Change default Chinese names to English
+% \renewcommand{\abstractname}{Abstract}
+% \renewcommand{\figurename}{Figure}
+% \renewcommand{\tablename}{Table}
+
+% Packages for specific formatting
+\usepackage{setspace} % For line spacing
+\usepackage{framed}   % For the Shaded environment (code blocks)
+\usepackage{fvextra}  % <<< ADD THIS LINE for \pandocbounded and better verbatim
+\providecommand{\pandocbounded}[1]{#1}
+% \usepackage{listings}
+% \usepackage{titlesec} % Not strictly needed for this title customization
+
+% Additional packages for robustness and features
+\usepackage{amsmath, amssymb, amsfonts} % Math typesetting
+\usepackage{booktabs}    % Professional tables
+\usepackage{longtable}
+\usepackage{caption}     % Customizing captions
+\usepackage{csquotes}    % Context-sensitive quotes
+\usepackage{enumitem}    % Customizing lists
+\usepackage{float}       % For [H] float placement
+\usepackage{indentfirst} % Indent first paragraph of sections
+\usepackage{etoolbox}    % For \AtBeginEnvironment
+
+% Force figures to appear "here" [H]
+\usepackage{letltxmacro} % For \LetLtxMacro
+\LetLtxMacro{\oldfigure}{\figure}
+\LetLtxMacro{\oldendfigure}{\endfigure}
+\renewenvironment{figure}[1][] % Takes an optional placement argument (e.g., [htbp] from Pandoc) but ignores it
+  {\oldfigure[H]} % Force [H] placement from the float package
+  {\oldendfigure}
+
+% Left-align level 1 headings (sections)
+\ctexset{
+  section = {
+    format = {\raggedright\Large\bfseries}
+  }
+}
+
+\newcommand{\real}[1]{#1}
+\usepackage{graphicx}
+\usepackage[export]{adjustbox} % Add this line to make 'max width' and 'max height' available to \includegraphics
+\usepackage{endnotes}
+\usepackage{fancyhdr}
+
+\let\OriginalPandocGraphixIncludeGraphics\includegraphics
+\renewcommand{\includegraphics}[2][]{%
+  \OriginalPandocGraphixIncludeGraphics[
+    max width=\linewidth,      % now limited to one column
+    max height=0.8\textheight, % keep your height constraint
+    keepaspectratio,
+    #1
+  ]{#2}%
+}
+
+% Center figures by default
+\AtBeginEnvironment{figure}{\centering}
+% Optional: Center caption text as well
+% \captionsetup{justification=centering,singlelinecheck=false}
+
+$if(geometry)$
+\usepackage[$for(geometry)$$geometry$$sep$,$endfor$]{geometry}
+$endif$
+
+% Setup fancyhdr
+\pagestyle{fancy}
+\fancyhf{} % Clear existing header/footer
+$if(title-meta)$
+  \fancyhead[C]{华中科技大学人工智能与自动化学院课程实验报告} % Set title in the center header
+$endif$
+\renewcommand{\headrulewidth}{0.4pt} % Optional: adds a line under the header
+\fancyfoot[C]{\thepage} % Centered page number in footer
+
+% Hyperref setup (should be loaded relatively late)
+\usepackage{hyperref}
+\hypersetup{
+  unicode=true, % For non-Latin characters in bookmarks
+  pdftitle={$title-meta$},
+  pdfauthor={$author-meta$},
+  pdfsubject={$subject-meta$},
+  pdfkeywords={$for(keywords)$$keywords$$sep$, $endfor$},
+  pdfborder={0 0 0}, % No border around links
+  breaklinks=true % Allow links to break over lines
+}
+$if(colorlinks)$
+  \hypersetup{linkcolor=$if(linkcolor)$$linkcolor$$else$blue$endif$,
+              citecolor=$if(citecolor)$$citecolor$$else$green$endif$,
+              urlcolor=$if(urlcolor)$$urlcolor$$else$magenta$endif$}
+$else$
+  % Potentially set colors for non-colorlinks mode if desired, e.g., to black
+  % \hypersetup{linkcolor=black, citecolor=black, urlcolor=black} % Example
+$endif$
+
+% Bibliography setup using biblatex
+$if(bibliography)$
+  \usepackage[backend=biber, style=numeric-comp, sorting=none, autocite=superscript]{biblatex} % Add autocite=superscript
+  \addbibresource{$bibliography$}
+
+  % Fix the formatting for citations to appear as [num] in superscript
+  \renewcommand{\supercite}[1]{\textsuperscript{[#1]}}
+
+  % Make the default cite command use superscript with brackets
+  \let\cite=\supercite
+
+  % Fix bibliography margin overflow issues
+  \setlength{\bibhang}{0pt} % Remove hanging indent if causing problems
+  \setlength{\biblabelsep}{0.5em} % Space after the label
+
+  % Enable URL and path breaking at more characters
+  \setcounter{biburlnumpenalty}{100}
+  \setcounter{biburllcpenalty}{100}
+  \setcounter{biburlucpenalty}{100}
+
+  % Allow linebreaks in more places in DOIs and URLs - More aggressive settings
+  \renewcommand*{\biburlsetup}{%
+    \Urlmuskip=0mu plus 5mu\relax   % Increased from 3mu to 5mu for more flexibility
+    \mathchardef\UrlBreakPenalty=0\relax  % Changed from 100 to 0 to encourage breaks
+    \def\UrlBigBreakPenalty{0}      % Allow breaks with zero penalty
+    \def\UrlBreaks{\do\.\do\@\do\\\do\/\do\!\do\_\do\|\do\;\do\>\do\]%
+      \do\)\do\,\do\?\do\'\do\+\do\=\do\#\do\-\do\~}  % Allow breaks at many more characters
+  }
+
+  % Force the url package to break at any character if needed
+  \expandafter\def\expandafter\UrlBreaks\expandafter{\UrlBreaks\do\a\do\b\do\c\do\d\do\e\do\f\do\g\do\h\do\i\do\j\do\k\do\l\do\m\do\n\do\o\do\p\do\q\do\r\do\s\do\t\do\u\do\v\do\w\do\x\do\y\do\z\do\A\do\B\do\C\do\D\do\E\do\F\do\G\do\H\do\I\do\J\do\K\do\L\do\M\do\N\do\O\do\P\do\Q\do\R\do\S\do\T\do\U\do\V\do\W\do\X\do\Y\do\Z}
+$endif$
+
+% Pandoc will set these based on your YAML or command line options
+$if(title)$
+  \title{$title$}
+$endif$
+$if(author)$
+  \author{$for(author)$$author$$sep$, $endfor$} % List authors in one line separated by commas
+$endif$
+$if(date)$
+  \date{$date$}
+$endif$
+
+% Define title format: Bold, Centered, Sanhao (三号)
+\makeatletter
+\renewcommand{\maketitle}{%
+  \begin{center}%
+    \zihao{-3}\bfseries \@title % Sanhao size (-3), Bold
+    $if(author)$
+      \\ \vspace{0.5em} % Add line break and some space before author
+      {\large \@author}
+    $endif$
+    $if(date)$
+      \\ \vspace{0.5em} % Add line break and some space before date
+      {\large \@date}
+    $endif$
+  \end{center}%
+  \vspace{1.5em} % Add some space after the title block
+}
+\makeatother
+
+% Other document-wide settings from Pandoc variables
+$if(fontsize)$
+  \usepackage{scrextend} % for \changefontsizes
+  \changefontsizes{$fontsize$}
+$endif$
+$if(linestretch)$
+  \setstretch{$linestretch$}
+$endif$
+
+% For syntax highlighting if needed by Pandoc's output
+$if(highlighting-macros)$
+$highlighting-macros$
+$endif$
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+\begin{document}
+
+% Apply body text formatting: Song Ti (宋体), XiaoSi (小四), 1.5 line spacing
+\songti % Set font to Song Ti for the body
+\zihao{-4} % XiaoSi size for the main text
+
+% Use the linestretch from Pandoc if provided, otherwise default to onehalfspacing
+$if(linestretch)$
+% Already set globally if defined
+$else$
+\onehalfspacing % Default if not overridden
+$endif$
+% --- BEGIN COVER PAGE ---
+$if(title)$ % A title is essential for a title page
+\begin{titlepage}
+  \centering
+  \thispagestyle{empty} % No header/footer on the cover page
+  \vspace*{\stretch{0.5}} % Pushes content down from the top
+
+  $if(logo)$
+  % Ensure graphicx package is loaded (it is in your template)
+  \includegraphics[width=0.25\textwidth]{$logo$}\par
+  \vspace{1cm} % Space after logo
+  $endif$
+
+  {\bfseries\zihao{0} $title$\par} % Title: e.g., 二号 (Erhao size), Bold
+  \vspace{0.5cm} % Space after title
+
+  $if(subtitle)$
+  {\itshape\zihao{2} $subtitle$\par} % Subtitle: e.g., 小二 (Xiao Er size), Italic
+  \vspace{1cm} % Space after subtitle
+  $endif$
+
+  \vspace*{\stretch{1}} % Flexible space
+
+  \begin{center} % Align the following details to the center
+    \zihao{-3} % Set font size for the details, e.g., 三号 (Sanhao size)
+    \setlength{\parindent}{0pt} % No indentation for these lines
+    \renewcommand{\arraystretch}{1.5} % Increase spacing between lines in the tabular-like structure
+    \begin{tabular}{@{}ll} % Use a simple two-column layout for alignment
+      $if(class)$
+      专业班级:              & $class$                              \\
+      $endif$
+      $if(stu_id)$
+      学\hspace{0.66em}号: & $stu_id$                             \\ % Adjusted spacing for alignment
+      $endif$
+      $if(author)$
+      姓\hspace{0.66em}名: & $for(author)$$author$$sep$, $endfor$ \\ % Adjusted spacing for alignment
+        $endif$
+      $if(tutor)$
+      指导教师:              & $tutor$                              \\
+        $endif$
+      $if(date)$
+      报告日期:              & $date$                               \\
+        $endif$
+    \end{tabular}
+  \end{center}
+
+  \vspace*{\stretch{1.5}} % Pushes content up from the bottom
+\end{titlepage}
+\cleardoublepage % Ensures next content starts on a new right-hand page
+$endif$
+% --- END COVER PAGE ---
+
+$if(toc)$
+\tableofcontents
+\newpage % Optional: start content on a new page after TOC
+$endif$
+
+$if(abstract)$
+\begin{abstract}
+  $abstract$
+\end{abstract}
+% \newpage % Optional: start content on a new page after abstract
+$endif$
+$if(keywords)$
+\section*{Keywords} % New unnumbered keywords section
+\noindent $for(keywords)$$keywords$$sep$, $endfor$
+$endif$
+$if(acknowledgements)$
+    \section*{Acknowledgements} % Use \section* for an unnumbered section
+  $acknowledgements$
+    \vspace{1em} % Add some space after the acknowledgements
+  $endif$
+
+  $body$ % THIS IS THE MOST IMPORTANT PANDOC VARIABLE
+
+    % \newpage
+    % \theendnotes
+    % \let\footnote\endnote
+
+  $if(bibliography)$
+    \newpage % Optional: start bibliography on a new page
+    % \nocite{*}
+    \printbibliography
+  $endif$
+
+\end{document}
