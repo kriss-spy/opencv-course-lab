@@ -25,6 +25,30 @@
 \usepackage{indentfirst} % Indent first paragraph of sections
 \usepackage{etoolbox}    % For \AtBeginEnvironment
 
+% Add these lines for better Unicode font support
+% fontspec is loaded by ctexart with xelatex, but explicit commands are needed to set fonts.
+\setmainfont{Noto Serif CJK SC} % Using a CJK variant for broader Unicode support in main text
+\setsansfont{Noto Sans CJK SC} % Using a CJK variant for broader Unicode support in sans-serif text
+\setmonofont{Noto Sans Mono CJK SC} % Monospaced font for code blocks and terminal output
+                        % Ensure the CJK variant of Noto Mono is installed for symbol coverage.
+
+% After font setup, map problematic Unicode chars to text to avoid missing glyph errors
+\usepackage{textcomp} % for \texttimes
+\usepackage{newunicodechar} % for mapping unicode to LaTeX macros
+
+% Map problematic Unicode characters to LaTeX-friendly glyphs via newunicodechar
+% Requires \usepackage{newunicodechar}
+\newunicodechar{ }{\enspace} % U+2003 Em space
+\newunicodechar{✅}{\checkmark} % U+2705
+\newunicodechar{❌}{\texttimes} % U+274C
+\newunicodechar{ℹ}{(info)} % U+2139
+\newunicodechar{🐞}{[bug]} % U+1F41E
+% Box-drawing characters
+\newunicodechar{─}{-} % U+2500
+\newunicodechar{│}{|} % U+2502
+\newunicodechar{┌}{+} % U+250C
+\newunicodechar{└}{+} % U+2514
+
 % Force figures to appear "here" [H]
 \usepackage{letltxmacro} % For \LetLtxMacro
 \LetLtxMacro{\oldfigure}{\figure}
@@ -198,6 +222,11 @@ $if(title)$ % A title is essential for a title page
   \vspace{1cm} % Space after logo
   $endif$
 
+  $if(sublogo)$ % Add this block for the sub-logo
+  \includegraphics[width=0.20\textwidth]{$sublogo$}\par % Adjust width as needed
+  \vspace{1cm} % Space after sub-logo
+  $endif$
+
   {\bfseries\zihao{0} $title$\par} % Title: e.g., 二号 (Erhao size), Bold
   \vspace{0.5cm} % Space after title
 
@@ -221,13 +250,13 @@ $if(title)$ % A title is essential for a title page
       $endif$
       $if(author)$
       姓\hspace{0.66em}名: & $for(author)$$author$$sep$, $endfor$ \\ % Adjusted spacing for alignment
-        $endif$
+      $endif$
       $if(tutor)$
       指导教师:              & $tutor$                              \\
-        $endif$
+      $endif$
       $if(date)$
       报告日期:              & $date$                               \\
-        $endif$
+      $endif$
     \end{tabular}
   \end{center}
 
@@ -253,21 +282,21 @@ $if(keywords)$
 \noindent $for(keywords)$$keywords$$sep$, $endfor$
 $endif$
 $if(acknowledgements)$
-    \section*{Acknowledgements} % Use \section* for an unnumbered section
-  $acknowledgements$
-    \vspace{1em} % Add some space after the acknowledgements
-  $endif$
+\section*{Acknowledgements} % Use \section* for an unnumbered section
+$acknowledgements$
+\vspace{1em} % Add some space after the acknowledgements
+$endif$
 
-  $body$ % THIS IS THE MOST IMPORTANT PANDOC VARIABLE
+$body$ % THIS IS THE MOST IMPORTANT PANDOC VARIABLE
 
-    % \newpage
-    % \theendnotes
-    % \let\footnote\endnote
+% \newpage
+% \theendnotes
+% \let\footnote\endnote
 
-  $if(bibliography)$
-    \newpage % Optional: start bibliography on a new page
-    % \nocite{*}
-    \printbibliography
-  $endif$
+$if(bibliography)$
+\newpage % Optional: start bibliography on a new page
+% \nocite{*}
+\printbibliography
+$endif$
 
 \end{document}

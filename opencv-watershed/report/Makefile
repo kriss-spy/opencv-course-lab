@@ -22,9 +22,14 @@ $(BUILD_DIR)/$(OUTPUT_PDF): $(MD_FILE) $(TEMPLATE_FILE)
 # Rule to create the DOCX
 docx: $(BUILD_DIR)/$(OUTPUT_DOCX)
 
-$(BUILD_DIR)/$(OUTPUT_DOCX): $(MD_FILE) $(TEMPLATE_FILE)
+$(BUILD_DIR)/$(OUTPUT_PDF): $(MD_FILE) $(TEMPLATE_FILE)
 	@mkdir -p $(BUILD_DIR)
-	pandoc "$(MD_FILE)" --template=$(TEMPLATE_FILE) -o $(BUILD_DIR)/$(OUTPUT_DOCX)
+	pandoc "$(MD_FILE)" \
+		--lua-filter=obsidian-link.lua \
+		--highlight-style=tango \
+		--template=$(TEMPLATE_FILE) \
+		--pdf-engine=latexmk --pdf-engine-opt=-xelatex \
+		-o $(BUILD_DIR)/$(OUTPUT_PDF)
 
 # Target to clean up build files
 clean:

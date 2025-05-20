@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -O3 -I/usr/include/opencv4 -DVERBOSE -DDEBUG -g # -Wall
+CXXFLAGS = -O3 -I/usr/include/opencv4 -g # -Wall
 LDFLAGS = -L/usr/lib -lopencv_core -lopencv_imgcodecs -lopencv_highgui -lopencv_imgproc
 
 SRC = task1.cpp task2.cpp task3.cpp

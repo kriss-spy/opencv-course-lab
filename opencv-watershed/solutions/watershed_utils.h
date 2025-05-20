@@ -303,6 +303,25 @@ int get_k(int k_min, int k_max)
         getline(cin, input);
         if (!input.empty())
         {
+            // Check for non-digit characters
+            bool has_non_digit = false;
+            for (char c : input)
+            {
+                if (!isdigit(c))
+                {
+                    // Allow a leading minus sign if k_min can be negative, though current context implies positive k
+                    // For this specific function, k is expected to be positive.
+                    has_non_digit = true;
+                    break;
+                }
+            }
+
+            if (has_non_digit)
+            {
+                print_sth(MSG_ERROR, "Invalid input! Please enter a whole number without non-digit characters (e.g., 'e', '.').");
+                continue;
+            }
+
             try
             {
                 k = stoi(input);
@@ -317,6 +336,7 @@ int get_k(int k_min, int k_max)
             }
             catch (const std::invalid_argument &e)
             {
+                // This case might be less likely now with the pre-check, but kept for robustness
                 print_sth(MSG_ERROR, "Invalid input! Please enter a valid number.");
             }
             catch (const std::out_of_range &e)
